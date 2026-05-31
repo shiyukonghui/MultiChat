@@ -19,14 +19,47 @@ const MAX_ROUNDS = 10;
 export function loadHistoryFromStorage(): ChatMessage[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const messages: ChatMessage[] = JSON.parse(stored);
-      return messages.slice(-MAX_ROUNDS * 2);
+    // 验证存储的数据是否存在且为非空字符串
+    if (!stored || typeof stored !== 'string' || stored.trim() === '') {
+      return [];
     }
+
+    const parsed = JSON.parse(stored);
+
+    // 验证解析后的结果是否为数组
+    if (!Array.isArray(parsed)) {
+      console.warn('localStorage 中的对话历史不是数组格式，已重置');
+      localStorage.removeItem(STORAGE_KEY);
+      return [];
+    }
+
+    // 验证数组中的每个元素是否符合 ChatMessage 结构
+    const validMessages = parsed.filter((item): item is ChatMessage => {
+      return (
+        item &&
+        typeof item === 'object' &&
+        (item.role === 'user' || item.role === 'assistant') &&
+        typeof item.content === 'string'
+      );
+    });
+
+    // 如果有无效数据，记录警告
+    if (validMessages.length !== parsed.length) {
+      console.warn(`过滤掉了 ${parsed.length - validMessages.length} 条无效消息记录`);
+    }
+
+    // 只保留最近 N 轮对话
+    return validMessages.slice(-MAX_ROUNDS * 2);
   } catch (e) {
     console.error('恢复对话历史失败:', e);
+    // 如果解析失败，清除损坏的数据
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // 忽略清除失败的情况
+    }
+    return [];
   }
-  return [];
 }
 
 // 保存对话历史到 localStorage
@@ -210,10 +243,17 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     // 从历史记录恢复会话
     case 'LOAD_HISTORY': {
       const { messages, selectedModel } = action.payload;
-      saveHistoryToStorage(messages);
+
+      // 验证 messages 是否为数组，防止传入无效数据
+      const validMessages = Array.isArray(messages) ? messages : [];
+      if (!Array.isArray(messages)) {
+        console.warn('LOAD_HISTORY 接收到的 messages 不是数组，已使用空数组代替');
+      }
+
+      saveHistoryToStorage(validMessages);
       return {
         ...state,
-        messages,
+        messages: validMessages,
         selectedModel,
         modelStatuses: {},
         isLoading: false,

@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::history::{self, HistoryRecord};
 use crate::models::{AppState, ChatMessage};
 
-/// 历史记录响应体
+/// 历史记录列表项响应体（用于列表查询，不包含完整消息）
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryResponse {
@@ -27,6 +27,34 @@ pub struct HistoryResponse {
     pub selected_model: Option<String>,
     /// 消息数量（不返回完整消息列表，减少数据传输）
     pub message_count: usize,
+}
+
+/// 历史记录详情响应体（用于详情查询，包含完整消息）
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryDetailResponse {
+    /// 历史记录唯一标识符
+    pub id: String,
+    /// 对话名称/标题
+    pub name: String,
+    /// 创建时间戳
+    pub timestamp: u64,
+    /// 当前选中的模型ID
+    pub selected_model: Option<String>,
+    /// 对话消息列表
+    pub messages: Vec<ChatMessage>,
+}
+
+impl From<HistoryRecord> for HistoryDetailResponse {
+    fn from(record: HistoryRecord) -> Self {
+        Self {
+            id: record.id,
+            name: record.name,
+            timestamp: record.timestamp,
+            selected_model: record.selected_model,
+            messages: record.messages,
+        }
+    }
 }
 
 /// 创建历史记录的请求体
@@ -132,18 +160,19 @@ pub async fn delete_history(
 }
 
 /// GET /api/histories/:id - 获取单个历史记录的详细信息
-/// 
+///
 /// 返回包含完整消息内容的历史记录
 /// 成功返回 200，历史记录不存在返回 404
 pub async fn get_history_detail(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<HistoryRecord>, StatusCode> {
+) -> Result<Json<HistoryDetailResponse>, StatusCode> {
     let histories = state.histories.read().await;
-    
+
     // 查找指定 ID 的历史记录
     if let Some(record) = histories.iter().find(|h| h.id == id) {
-        Ok(Json(record.clone()))
+        let response: HistoryDetailResponse = record.clone().into();
+        Ok(Json(response))
     } else {
         Err(StatusCode::NOT_FOUND)
     }

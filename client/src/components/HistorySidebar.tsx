@@ -11,14 +11,14 @@ import {
   Divider,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
-import type { HistoryRecord } from '../types';
+import type { HistoryRecordSummary } from '../types';
 
 // 组件 Props 接口
 interface HistorySidebarProps {
   open: boolean;
   onClose: () => void;
-  histories: HistoryRecord[];
-  onSelectHistory: (history: HistoryRecord) => void;
+  histories: HistoryRecordSummary[];  // 使用摘要类型
+  onSelectHistory: (history: HistoryRecordSummary) => void;  // 选择时只传递摘要信息
   onDeleteHistory: (id: string) => void;
 }
 

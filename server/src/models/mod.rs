@@ -51,6 +51,9 @@ pub struct ModelConfigResponse {
     /// 工具调用轮次
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_rounds: Option<u32>,
+    /// 最大 Token 数
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
     /// 是否使用完整 URL
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_full_url: Option<bool>,
@@ -87,6 +90,8 @@ pub struct UpdateModelDetailRequest {
     pub context_window_output: Option<u32>,
     /// 工具调用轮次
     pub tool_call_rounds: Option<u32>,
+    /// 最大 Token 数
+    pub max_tokens: Option<u32>,
     /// 是否使用完整 URL
     pub use_full_url: Option<bool>,
 }
@@ -122,6 +127,8 @@ pub struct CreateModelRequest {
     pub context_window_output: Option<u32>,
     /// 工具调用轮次
     pub tool_call_rounds: Option<u32>,
+    /// 最大 Token 数
+    pub max_tokens: Option<u32>,
     /// 是否使用完整 URL
     pub use_full_url: Option<bool>,
 }

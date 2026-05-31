@@ -29,8 +29,8 @@ import StreamingResponse from './components/StreamingResponse';
 import ModelConfigPanel from './pages/ModelConfigPanel';
 import HistorySidebar from './components/HistorySidebar';
 import SaveHistoryDialog from './components/SaveHistoryDialog';
-import { fetchHistories, saveHistory, deleteHistory } from './utils/api';
-import type { ChatMessage, HistoryRecord } from './types';
+import { fetchHistories, fetchHistoryDetail, saveHistory, deleteHistory } from './utils/api';
+import type { ChatMessage, HistoryRecordSummary } from './types';
 
 // 侧边栏宽度常量
 const DRAWER_WIDTH = 280;
@@ -152,14 +152,16 @@ function App() {
 
   // 历史记录侧边栏状态
   const [historySidebarOpen, setHistorySidebarOpen] = useState(false);
-  // 历史记录列表
-  const [histories, setHistories] = useState<HistoryRecord[]>([]);
+  // 历史记录列表（只包含摘要信息）
+  const [histories, setHistories] = useState<HistoryRecordSummary[]>([]);
   // 保存历史记录对话框状态
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   // 恢复历史记录确认对话框状态
   const [loadHistoryConfirmOpen, setLoadHistoryConfirmOpen] = useState(false);
-  // 待恢复的历史记录
-  const [pendingHistory, setPendingHistory] = useState<HistoryRecord | null>(null);
+  // 待恢复的历史记录（只存储摘要，详情需要异步获取）
+  const [pendingHistory, setPendingHistory] = useState<HistoryRecordSummary | null>(null);
+  // 加载历史记录详情时的状态
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // 当前选中的模型状态
   const selectedModelStatus = state.selectedModel
@@ -226,27 +228,47 @@ function App() {
   }, [state.selectedModel, state.messages, loadHistories]);
 
   // 处理选择历史记录
-  const handleSelectHistory = useCallback((history: HistoryRecord) => {
+  const handleSelectHistory = useCallback(async (history: HistoryRecordSummary) => {
+    // 如果有未保存的对话，显示确认对话框
     if (state.messages.length > 0) {
-      // 如果有未保存的对话，显示确认对话框
       setPendingHistory(history);
       setLoadHistoryConfirmOpen(true);
-    } else {
-      // 直接恢复
-      loadHistory(history.messages, history.selectedModel);
+      return;
+    }
+
+    // 异步获取历史记录详情
+    setIsLoadingHistory(true);
+    try {
+      const detail = await fetchHistoryDetail(history.id);
+      loadHistory(detail.messages, detail.selectedModel);
       setHistorySidebarOpen(false);
       setSnackbar({ open: true, message: '已加载历史记录' });
+    } catch (error) {
+      console.error('加载历史记录详情失败:', error);
+      setSnackbar({ open: true, message: '加载历史记录详情失败' });
+    } finally {
+      setIsLoadingHistory(false);
     }
   }, [state.messages.length, loadHistory]);
 
   // 确认加载历史记录
-  const confirmLoadHistory = useCallback(() => {
-    if (pendingHistory) {
-      loadHistory(pendingHistory.messages, pendingHistory.selectedModel);
+  const confirmLoadHistory = useCallback(async () => {
+    if (!pendingHistory) return;
+
+    setIsLoadingHistory(true);
+    try {
+      // 异步获取完整的历史记录详情
+      const detail = await fetchHistoryDetail(pendingHistory.id);
+      loadHistory(detail.messages, detail.selectedModel);
+      setSnackbar({ open: true, message: '已加载历史记录' });
+    } catch (error) {
+      console.error('加载历史记录详情失败:', error);
+      setSnackbar({ open: true, message: '加载历史记录详情失败' });
+    } finally {
       setPendingHistory(null);
       setLoadHistoryConfirmOpen(false);
       setHistorySidebarOpen(false);
-      setSnackbar({ open: true, message: '已加载历史记录' });
+      setIsLoadingHistory(false);
     }
   }, [pendingHistory, loadHistory]);
 
@@ -500,7 +522,7 @@ function App() {
         />
 
         {/* ========== 恢复历史记录确认对话框 ========== */}
-        <Dialog open={loadHistoryConfirmOpen} onClose={() => setLoadHistoryConfirmOpen(false)}>
+        <Dialog open={loadHistoryConfirmOpen} onClose={() => !isLoadingHistory && setLoadHistoryConfirmOpen(false)}>
           <DialogTitle>确认加载历史记录</DialogTitle>
           <DialogContent>
             <Typography variant="body1">
@@ -508,9 +530,16 @@ function App() {
             </Typography>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setLoadHistoryConfirmOpen(false)}>取消</Button>
-            <Button onClick={confirmLoadHistory} color="primary" variant="contained">
-              确认
+            <Button onClick={() => setLoadHistoryConfirmOpen(false)} disabled={isLoadingHistory}>
+              取消
+            </Button>
+            <Button
+              onClick={confirmLoadHistory}
+              color="primary"
+              variant="contained"
+              disabled={isLoadingHistory}
+            >
+              {isLoadingHistory ? '加载中...' : '确认'}
             </Button>
           </DialogActions>
         </Dialog>

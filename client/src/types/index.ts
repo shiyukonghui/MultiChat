@@ -16,6 +16,7 @@ export interface ModelConfig {
   contextWindowInput?: number;
   contextWindowOutput?: number;
   toolCallRounds?: number;
+  maxTokens?: number; // 单次回复最大token数
   useFullUrl: boolean;
 }
 
@@ -31,6 +32,7 @@ export interface ModelFormData {
   contextWindowInput: number;
   contextWindowOutput: number;
   toolCallRounds: number;
+  maxTokens: number; // 单次回复最大token数
   useFullUrl: boolean;
   configMode: 'provider' | 'custom'; // Tab切换模式
   provider?: string; // 选择模型服务商时使用
@@ -48,6 +50,7 @@ export const DEFAULT_MODEL_FORM_DATA: ModelFormData = {
   contextWindowInput: 184000,
   contextWindowOutput: 16000,
   toolCallRounds: 200,
+  maxTokens: 4096, // 默认单次回复最大4096 tokens
   useFullUrl: false,
   configMode: 'custom',
   provider: '',
@@ -128,7 +131,16 @@ export type ChatAction =
   | { type: 'REFRESH_MODELS'; payload: string[] }
   | { type: 'LOAD_HISTORY'; payload: { messages: ChatMessage[]; selectedModel: string | null } };
 
-// 历史记录
+// 历史记录摘要（用于列表显示，不包含完整消息）
+export interface HistoryRecordSummary {
+  id: string;
+  name: string;
+  timestamp: number;
+  selectedModel: string | null;
+  messageCount: number;
+}
+
+// 历史记录（包含完整消息内容）
 export interface HistoryRecord {
   id: string;
   name: string;

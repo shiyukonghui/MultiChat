@@ -72,6 +72,7 @@ function modelToFormData(model: ModelConfig): ModelFormData {
     contextWindowInput: model.contextWindowInput || 184000,
     contextWindowOutput: model.contextWindowOutput || 16000,
     toolCallRounds: model.toolCallRounds || 200,
+    maxTokens: model.maxTokens || 4096, // 转换时包含 maxTokens
     useFullUrl: model.useFullUrl,
     configMode: 'custom',
     provider: model.provider === 'custom' ? '' : model.provider,
@@ -163,6 +164,7 @@ export default function ModelConfigDialog({ open, onClose, onSubmit, onUpdate, e
       contextWindowInput: formData.contextWindowInput,
       contextWindowOutput: formData.contextWindowOutput,
       toolCallRounds: formData.toolCallRounds,
+      maxTokens: formData.maxTokens, // 提交时包含 maxTokens
       useFullUrl: formData.useFullUrl,
     };
 
@@ -426,6 +428,27 @@ export default function ModelConfigDialog({ open, onClose, onSubmit, onUpdate, e
                       type="number"
                       value={formData.toolCallRounds}
                       onChange={(e) => handleChange('toolCallRounds', parseInt(e.target.value) || 0)}
+                    />
+                  </Box>
+
+                  {/* 最大 Token 数 */}
+                  <Box>
+                    <Typography variant="body2" sx={{ mb: 0.5 }}>
+                      最大 Token 数 (max_tokens)
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                      限制模型单次回复生成的最大 token 数量，控制回复长度和成本
+                    </Typography>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      value={formData.maxTokens}
+                      onChange={(e) => handleChange('maxTokens', parseInt(e.target.value) || 1)}
+                      slotProps={{
+                        input: {
+                          inputProps: { min: 1, max: 32768 },
+                        },
+                      }}
                     />
                   </Box>
                 </Box>

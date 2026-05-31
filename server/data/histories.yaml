@@ -1,0 +1,23 @@
+histories:
+- id: 1d2715b2-3bf6-4f81-9076-6e270fbf80eb
+  name: 新会话 05/31 22:03
+  timestamp: 1780236242
+  selected_model: deepseek-v4-flash
+  messages:
+  - role: user
+    content: 测试连接，回复666
+    model: null
+  - role: assistant
+    content: '666'
+    model: deepseek-v4-flash
+- id: 3717dd54-5af3-4fce-85e9-552a125c5332
+  name: 新会话 05/31 22:26
+  timestamp: 1780237605
+  selected_model: deepseek-v4-flash
+  messages:
+  - role: user
+    content: 测试连接，回复999
+    model: null
+  - role: assistant
+    content: '999'
+    model: deepseek-v4-flash

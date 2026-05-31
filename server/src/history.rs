@@ -7,6 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// 历史记录结构体：代表一次完整的对话会话
+/// 用于 YAML 存储，字段使用下划线命名
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryRecord {
     /// 历史记录唯一标识符（UUID）

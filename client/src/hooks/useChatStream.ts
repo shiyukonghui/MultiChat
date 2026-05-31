@@ -16,9 +16,20 @@ interface UseChatStreamReturn {
 // SSE 流式对话管理 Hook
 // 封装 EventSource 连接、多模型状态管理和断线重连逻辑
 export function useChatStream(): UseChatStreamReturn {
+  // 安全地加载历史记录，确保始终返回数组
+  const loadMessages = (): ChatMessage[] => {
+    const history = loadHistoryFromStorage();
+    // 双重保险：确保返回的是数组
+    if (!Array.isArray(history)) {
+      console.warn('loadHistoryFromStorage 返回了非数组值，使用空数组');
+      return [];
+    }
+    return history;
+  };
+
   const [state, dispatch] = useReducer(chatReducer, {
     ...initialChatState,
-    messages: loadHistoryFromStorage(), // 从 localStorage 恢复历史对话
+    messages: loadMessages(), // 从 localStorage 恢复历史对话
   });
 
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -188,6 +199,12 @@ export function useChatStream(): UseChatStreamReturn {
 
   // 从历史记录恢复会话
   const loadHistory = useCallback((messages: ChatMessage[], selectedModel: string | null) => {
+    // 验证参数有效性
+    if (!Array.isArray(messages)) {
+      console.error('loadHistory 接收到的 messages 不是数组:', messages);
+      messages = [];
+    }
+
     isResettingRef.current = true;
     closeConnection();
     dispatch({ type: 'LOAD_HISTORY', payload: { messages, selectedModel } });

@@ -42,6 +42,7 @@ pub async fn get_models(
                 context_window_input: Some(m.context_window_input),
                 context_window_output: Some(m.context_window_output),
                 tool_call_rounds: Some(m.tool_call_rounds),
+                max_tokens: Some(m.max_tokens), // 返回 max_tokens
                 use_full_url: Some(m.use_full_url),
             }
         })
@@ -104,6 +105,9 @@ pub async fn update_model(
                     if let Some(rounds) = detail.tool_call_rounds {
                         model.tool_call_rounds = rounds;
                     }
+                    if let Some(max_tokens) = detail.max_tokens {
+                        model.max_tokens = max_tokens;
+                    }
                     if let Some(use_full_url) = detail.use_full_url {
                         model.use_full_url = use_full_url;
                     }
@@ -159,7 +163,7 @@ pub async fn create_model(
         model: body.id.clone(),
         enabled: true,
         timeout_seconds: 60,
-        max_tokens: 4096,
+        max_tokens: body.max_tokens.unwrap_or(4096), // 使用前端传入的值，默认4096
         status: "active".to_string(),
         api_key: body.api_key.clone().unwrap_or_default(),
         // 新增字段
@@ -199,6 +203,7 @@ pub async fn create_model(
         context_window_input: Some(new_model.context_window_input),
         context_window_output: Some(new_model.context_window_output),
         tool_call_rounds: Some(new_model.tool_call_rounds),
+        max_tokens: Some(new_model.max_tokens), // 返回 max_tokens
         use_full_url: Some(new_model.use_full_url),
     };
 

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ModelConfig, HistoryRecord } from '../types';
+import type { ModelConfig, HistoryRecord, HistoryRecordSummary } from '../types';
 
 // 创建 axios 实例，统一配置基础路径和超时
 const api = axios.create({
@@ -44,9 +44,9 @@ export function createChatStreamUrl(message: string, history: string): string {
   return `/api/chat/stream?${params.toString()}`;
 }
 
-// 获取历史记录列表
-export async function fetchHistories(): Promise<HistoryRecord[]> {
-  const response = await api.get<HistoryRecord[]>('/histories');
+// 获取历史记录列表（只返回摘要信息，不包含完整消息）
+export async function fetchHistories(): Promise<HistoryRecordSummary[]> {
+  const response = await api.get<HistoryRecordSummary[]>('/histories');
   return response.data;
 }
 
@@ -59,4 +59,10 @@ export async function saveHistory(history: Omit<HistoryRecord, 'id' | 'timestamp
 // 删除历史记录
 export async function deleteHistory(id: string): Promise<void> {
   await api.delete(`/histories/${id}`);
+}
+
+// 获取单个历史记录的详细信息（包含完整消息内容）
+export async function fetchHistoryDetail(id: string): Promise<HistoryRecord> {
+  const response = await api.get<HistoryRecord>(`/histories/${id}`);
+  return response.data;
 }
