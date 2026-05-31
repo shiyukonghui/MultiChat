@@ -1,0 +1,4 @@
+- [x] call_real_api 函数对 custom provider + openai-chat-completions 格式的调用逻辑实现
+- [x] use_full_url 开关逻辑正确处理
+- [x] api_endpoint 为空时返回有意义的错误，而不是模拟文本
+- [x] 编译通过

@@ -24,6 +24,17 @@ export async function createModel(model: Omit<ModelConfig, 'status' | 'reason'>)
   return response.data;
 }
 
+// 删除模型
+export async function deleteModel(id: string): Promise<void> {
+  await api.delete(`/models/${id}`);
+}
+
+// 更新模型全部配置字段
+export async function updateModelDetail(id: string, model: Omit<ModelConfig, 'status' | 'reason'>): Promise<ModelConfig> {
+  const response = await api.put<ModelConfig>(`/models/${id}`, model);
+  return response.data;
+}
+
 // 构建 SSE 流式对话的请求 URL
 export function createChatStreamUrl(message: string, history: string): string {
   const params = new URLSearchParams({ message });

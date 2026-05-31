@@ -8,11 +8,10 @@ use tokio::sync::RwLock;
 
 /// 模型配置响应（适应前端 API 返回格式）
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModelConfigResponse {
     /// 模型唯一标识
     pub id: String,
-    /// 模型显示名称
-    pub name: String,
     /// 服务提供商
     pub provider: String,
     /// 是否启用
@@ -61,6 +60,34 @@ pub struct ModelConfigResponse {
 pub struct UpdateModelRequest {
     /// 是否启用该模型
     pub enabled: bool,
+}
+
+/// 更新模型详情的请求体（用于编辑模型全部字段）
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateModelDetailRequest {
+    /// 服务提供商
+    pub provider: Option<String>,
+    /// API 格式
+    pub api_format: Option<String>,
+    /// API 端点地址
+    pub api_endpoint: Option<String>,
+    /// API 密钥
+    pub api_key: Option<String>,
+    /// 是否支持多模态
+    pub is_multimodal: Option<bool>,
+    /// 模型系列
+    pub model_series: Option<String>,
+    /// 模型展示名称
+    pub display_name: Option<String>,
+    /// 上下文窗口 - 输入
+    pub context_window_input: Option<u32>,
+    /// 上下文窗口 - 输出
+    pub context_window_output: Option<u32>,
+    /// 工具调用轮次
+    pub tool_call_rounds: Option<u32>,
+    /// 是否使用完整 URL
+    pub use_full_url: Option<bool>,
 }
 
 /// 创建模型的请求体

@@ -17,8 +17,8 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import { fetchModels, updateModel, createModel } from '../utils/api';
-import AddModelDialog from '../components/AddModelDialog';
+import { fetchModels, updateModel, createModel, deleteModel, updateModelDetail } from '../utils/api';
+import ModelConfigDialog from '../components/AddModelDialog';
 import type { ModelConfig } from '../types';
 
 // 模型配置管理页面组件
@@ -32,6 +32,7 @@ export default function ModelConfigPanel({ onModelsChange }: ModelConfigPanelPro
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingModel, setEditingModel] = useState<ModelConfig | null>(null);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
     open: false,
     message: '',
@@ -105,13 +106,61 @@ export default function ModelConfigPanel({ onModelsChange }: ModelConfigPanelPro
   };
 
   // 删除模型
-  const handleDeleteModel = async (_id: string) => {
-    // TODO: 实现删除API
-    setSnackbar({
-      open: true,
-      message: '删除功能开发中',
-      severity: 'info',
-    });
+  const handleDeleteModel = async (id: string) => {
+    try {
+      await deleteModel(id);
+      setModels((prev) => prev.filter((m) => m.id !== id));
+      onModelsChange?.();
+      setSnackbar({
+        open: true,
+        message: '模型已删除',
+        severity: 'success',
+      });
+    } catch (err) {
+      console.error('删除模型失败:', err);
+      setSnackbar({
+        open: true,
+        message: '删除失败，请稍后重试',
+        severity: 'error',
+      });
+    }
+  };
+
+  // 编辑模型
+  const handleEditModel = (model: ModelConfig) => {
+    setEditingModel(model);
+    setDialogOpen(true);
+  };
+
+  // 更新模型
+  const handleUpdateModel = async (id: string, model: Omit<ModelConfig, 'status' | 'reason'>) => {
+    try {
+      await updateModelDetail(id, model);
+      setModels((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, ...model } : m))
+      );
+      setDialogOpen(false);
+      setEditingModel(null);
+      onModelsChange?.();
+      setSnackbar({
+        open: true,
+        message: '模型更新成功',
+        severity: 'success',
+      });
+    } catch (err) {
+      console.error('更新模型失败:', err);
+      setSnackbar({
+        open: true,
+        message: '更新失败，请稍后重试',
+        severity: 'error',
+      });
+    }
+  };
+
+  // 关闭弹窗
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setEditingModel(null);
   };
 
   // 关闭 Snackbar
@@ -194,7 +243,7 @@ export default function ModelConfigPanel({ onModelsChange }: ModelConfigPanelPro
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
                   <Box>
                     <Typography variant="h6" component="div">
-                      {model.displayName || model.name}
+                      {model.displayName || model.id}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       ID: {model.id}
@@ -228,7 +277,7 @@ export default function ModelConfigPanel({ onModelsChange }: ModelConfigPanelPro
                     onChange={(_, checked) => handleToggleModel(model.id, checked)}
                   />
                   <Box>
-                    <IconButton size="small" sx={{ mr: 0.5 }}>
+                    <IconButton size="small" sx={{ mr: 0.5 }} onClick={() => handleEditModel(model)}>
                       <EditIcon fontSize="small" />
                     </IconButton>
                     <IconButton size="small" onClick={() => handleDeleteModel(model.id)}>
@@ -259,11 +308,13 @@ export default function ModelConfigPanel({ onModelsChange }: ModelConfigPanelPro
         </Paper>
       )}
 
-      {/* 添加模型弹窗 */}
-      <AddModelDialog
+      {/* 添加/编辑模型弹窗 */}
+      <ModelConfigDialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={handleCloseDialog}
         onSubmit={handleAddModel}
+        onUpdate={handleUpdateModel}
+        editModel={editingModel}
       />
 
       {/* 操作反馈提示 */}

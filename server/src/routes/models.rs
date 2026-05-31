@@ -8,7 +8,7 @@ use axum::{
 };
 use crate::config;
 use crate::config::ModelConfig;
-use crate::models::{AppState, ModelConfigResponse, UpdateModelRequest, CreateModelRequest};
+use crate::models::{AppState, ModelConfigResponse, UpdateModelRequest, UpdateModelDetailRequest, CreateModelRequest};
 
 /// GET /api/models - 获取所有模型配置列表
 /// 返回启用/禁用状态及各模型基本信息
@@ -28,7 +28,6 @@ pub async fn get_models(
 
             ModelConfigResponse {
                 id: m.id.clone(),
-                name: m.name.clone(),
                 provider: m.provider.clone(),
                 enabled: m.enabled,
                 status,
@@ -50,26 +49,89 @@ pub async fn get_models(
     Json(response)
 }
 
-/// PUT /api/models/{id} - 更新指定模型的启用/禁用状态
-/// 请求体：{ "enabled": true/false }
+/// PUT /api/models/{id} - 更新指定模型的配置信息
+/// 支持两种请求格式：
+///   1. { "enabled": true/false } - 仅更新启用/禁用状态（向后兼容）
+///   2. 全字段更新 - 编辑模型全部配置字段
 /// 成功返回 200，模型不存在返回 404
 pub async fn update_model(
     State(state): State<AppState>,
     Path(id): Path<String>,
-    Json(body): Json<UpdateModelRequest>,
+    Json(body): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let mut models = state.models.write().await;
-    if let Some(model) = models.iter_mut().find(|m| m.id == id) {
-        model.enabled = body.enabled;
+    let model_found = models.iter().position(|m| m.id == id);
 
-        // 持久化到 YAML 文件
+    if let Some(index) = model_found {
+        let model = &mut models[index];
+
+        // 判断是全字段更新(包含 apiFormat/apiEndpoint 字段)还是仅更新 enabled
+        if body.get("apiFormat").is_some() || body.get("apiEndpoint").is_some() || body.get("provider").is_some() {
+            match serde_json::from_value::<UpdateModelDetailRequest>(body.clone()) {
+                Ok(detail) => {
+                    if let Some(provider) = detail.provider {
+                        model.provider = provider;
+                    }
+                    if let Some(api_format) = detail.api_format {
+                        model.api_format = api_format;
+                    }
+                    if let Some(api_endpoint) = detail.api_endpoint {
+                        model.api_endpoint = api_endpoint;
+                    }
+                    if let Some(api_key) = detail.api_key {
+                        model.api_key = api_key;
+                    }
+                    if let Some(is_multimodal) = detail.is_multimodal {
+                        model.is_multimodal = is_multimodal;
+                    }
+                    if let Some(model_series) = detail.model_series {
+                        model.model_series = model_series;
+                    }
+                    // displayName: 空字符串视为未设置
+                    if let Some(display_name) = detail.display_name {
+                        if display_name.is_empty() {
+                            model.display_name = None;
+                        } else {
+                            model.display_name = Some(display_name);
+                        }
+                    }
+                    if let Some(ctx_in) = detail.context_window_input {
+                        model.context_window_input = ctx_in;
+                    }
+                    if let Some(ctx_out) = detail.context_window_output {
+                        model.context_window_output = ctx_out;
+                    }
+                    if let Some(rounds) = detail.tool_call_rounds {
+                        model.tool_call_rounds = rounds;
+                    }
+                    if let Some(use_full_url) = detail.use_full_url {
+                        model.use_full_url = use_full_url;
+                    }
+
+                    if let Some(enabled) = body.get("enabled").and_then(|v| v.as_bool()) {
+                        model.enabled = enabled;
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("反序列化 UpdateModelDetailRequest 失败: {}, body: {}", e, body);
+                }
+            }
+        } else {
+            if let Ok(body) = serde_json::from_value::<UpdateModelRequest>(body) {
+                model.enabled = body.enabled;
+            }
+        }
+
+        // 持久化到 YAML 文件（在可变借用释放后进行）
+        let _ = model;
+
         if let Err(e) = config::save_config(&models) {
             tracing::warn!("保存模型配置到文件失败: {}", e);
         }
 
         Ok(Json(serde_json::json!({
             "id": id,
-            "enabled": body.enabled
+            "enabled": models[index].enabled
         })))
     } else {
         Err(StatusCode::NOT_FOUND)
@@ -93,7 +155,6 @@ pub async fn create_model(
     // 构建新模型配置
     let new_model = ModelConfig {
         id: body.id.clone(),
-        name: body.display_name.clone().unwrap_or_else(|| body.id.clone()),
         provider: body.provider.clone(),
         model: body.id.clone(),
         enabled: true,
@@ -125,7 +186,6 @@ pub async fn create_model(
     // 构建响应
     let response = ModelConfigResponse {
         id: new_model.id.clone(),
-        name: new_model.name.clone(),
         provider: new_model.provider.clone(),
         enabled: new_model.enabled,
         status: "available".to_string(),
@@ -143,4 +203,30 @@ pub async fn create_model(
     };
 
     Ok(Json(response))
+}
+
+/// DELETE /api/models/{id} - 删除指定模型
+/// 成功返回 200，模型不存在返回 404
+pub async fn delete_model(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let mut models = state.models.write().await;
+    let initial_len = models.len();
+    models.retain(|m| m.id != id);
+
+    if models.len() == initial_len {
+        // 没有找到匹配的模型
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    // 持久化到 YAML 文件
+    if let Err(e) = config::save_config(&models) {
+        tracing::warn!("保存模型配置到文件失败: {}", e);
+    }
+
+    Ok(Json(serde_json::json!({
+        "id": id,
+        "deleted": true
+    })))
 }

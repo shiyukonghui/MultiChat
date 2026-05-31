@@ -14,7 +14,8 @@ pub async fn stream_chat(
     tx: mpsc::UnboundedSender<SseEvent>,
 ) {
     let model_id = model_config.id.clone();
-    let model_name = model_config.name.clone();
+    // 使用 display_name 或 id 作为显示名称
+    let model_display = model_config.display_name.as_ref().unwrap_or(&model_config.id).clone();
 
     // 解析对话历史，用于构建多轮对话上下文
     let history_context = if history.is_empty() {
@@ -27,11 +28,10 @@ pub async fn stream_chat(
     if model_config.api_key.is_empty() {
         // 无 API Key：使用模拟响应（包含对话历史上下文）
         let mock_response = format!(
-            "这是来自 **{}**（{}）的模拟回复。\n\n您的问题是：_{}_\n\n> ⚠️ 请设置环境变量 `LLM_API_KEY_{}` 以启用真实 API 调用。\n\n以下是模拟的详细回复：\n\n- 当前已配置模型：{}\n- 超时时间：{} 秒\n- 最大 Token：{}\n\n这是一段 **Markdown 格式** 的示例输出，包含：\n\n```rust\nfn main() {{\n    println!(\"Hello from MultiChat!\");\n}}\n```\n\n1. 列表项一\n2. 列表项二\n3. 列表项三{}",
-            model_name,
+            "这是来自 **{}**（{}）的模拟回复。\n\n您的问题是：_{}_\n\n> ⚠️ 请设置 API 密钥以启用真实 API 调用。\n\n以下是模拟的详细回复：\n\n- 当前已配置模型：{}\n- 超时时间：{} 秒\n- 最大 Token：{}\n\n这是一段 **Markdown 格式** 的示例输出，包含：\n\n```rust\nfn main() {{\n    println!(\"Hello from MultiChat!\");\n}}\n```\n\n1. 列表项一\n2. 列表项二\n3. 列表项三{}",
+            model_display,
             model_config.provider,
             message,
-            model_config.provider.to_uppercase(),
             model_config.model,
             model_config.timeout_seconds,
             model_config.max_tokens,
@@ -91,6 +91,92 @@ pub async fn stream_chat(
     }
 }
 
+/// 调用 OpenAI 兼容 API
+async fn call_openai_compatible_api(
+    model_config: &ModelConfig,
+    messages: &[serde_json::Value],
+) -> Result<String, String> {
+    // 构建请求端点
+    let endpoint = if !model_config.api_endpoint.is_empty() {
+        if model_config.use_full_url {
+            model_config.api_endpoint.clone()
+        } else {
+            format!("{}/chat/completions", model_config.api_endpoint.trim_end_matches('/'))
+        }
+    } else {
+        // 无自定义端点时使用默认 OpenAI 端点
+        "https://api.openai.com/v1/chat/completions".to_string()
+    };
+
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({
+        "model": model_config.model,
+        "messages": messages,
+        "max_tokens": model_config.max_tokens,
+        "stream": false,
+    });
+
+    let response = client
+        .post(&endpoint)
+        .header("Authorization", format!("Bearer {}", model_config.api_key))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .timeout(std::time::Duration::from_secs(model_config.timeout_seconds))
+        .send()
+        .await
+        .map_err(|e| format!("网络请求失败: {}", e))?;
+
+    let status = response.status();
+    let json: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("解析响应失败: {}", e))?;
+
+    if !status.is_success() {
+        let error_msg = json["error"]["message"].as_str().unwrap_or("未知错误");
+        return Err(format!("API 返回错误 ({}): {}", status.as_u16(), error_msg));
+    }
+
+    json["choices"][0]["message"]["content"]
+        .as_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "API 返回格式异常，缺少 choices[0].message.content".to_string())
+}
+
+/// 调用 Anthropic API
+async fn call_anthropic_api(
+    model_config: &ModelConfig,
+    messages: &[serde_json::Value],
+) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({
+        "model": model_config.model,
+        "max_tokens": model_config.max_tokens,
+        "messages": messages,
+    });
+
+    let response = client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", &model_config.api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .timeout(std::time::Duration::from_secs(model_config.timeout_seconds))
+        .send()
+        .await
+        .map_err(|e| format!("网络请求失败: {}", e))?;
+
+    let json: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("解析响应失败: {}", e))?;
+
+    json["content"][0]["text"]
+        .as_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "API 返回格式异常".to_string())
+}
+
 /// 调用真实 LLM API（传入对话历史以支持多轮对话）
 async fn call_real_api(
     model_config: &ModelConfig,
@@ -118,71 +204,25 @@ async fn call_real_api(
     // 根据 Provider 类型选择对应的 API 端点
     match model_config.provider.as_str() {
         "openai" => {
-            // OpenAI API 调用
-            let client = reqwest::Client::new();
-            let body = serde_json::json!({
-                "model": model_config.model,
-                "messages": messages,
-                "max_tokens": model_config.max_tokens,
-                "stream": false,
-            });
-
-            let response = client
-                .post("https://api.openai.com/v1/chat/completions")
-                .header("Authorization", format!("Bearer {}", model_config.api_key))
-                .header("Content-Type", "application/json")
-                .json(&body)
-                .timeout(std::time::Duration::from_secs(model_config.timeout_seconds))
-                .send()
-                .await
-                .map_err(|e| format!("网络请求失败: {}", e))?;
-
-            let json: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| format!("解析响应失败: {}", e))?;
-
-            json["choices"][0]["message"]["content"]
-                .as_str()
-                .map(|s| s.to_string())
-                .ok_or_else(|| "API 返回格式异常".to_string())
+            call_openai_compatible_api(model_config, &messages).await
         }
         "anthropic" => {
-            // Anthropic API 调用
-            let client = reqwest::Client::new();
-            let body = serde_json::json!({
-                "model": model_config.model,
-                "max_tokens": model_config.max_tokens,
-                "messages": messages,
-            });
-
-            let response = client
-                .post("https://api.anthropic.com/v1/messages")
-                .header("x-api-key", &model_config.api_key)
-                .header("anthropic-version", "2023-06-01")
-                .header("Content-Type", "application/json")
-                .json(&body)
-                .timeout(std::time::Duration::from_secs(model_config.timeout_seconds))
-                .send()
-                .await
-                .map_err(|e| format!("网络请求失败: {}", e))?;
-
-            let json: serde_json::Value = response
-                .json()
-                .await
-                .map_err(|e| format!("解析响应失败: {}", e))?;
-
-            json["content"][0]["text"]
-                .as_str()
-                .map(|s| s.to_string())
-                .ok_or_else(|| "API 返回格式异常".to_string())
+            call_anthropic_api(model_config, &messages).await
         }
         _ => {
-            // 未知 Provider：返回模拟响应
-            Ok(format!(
-                "来自 **{}** 的回复（Provider '{}' 暂不支持直接调用）\n\n您的问题：{}",
-                model_config.name, model_config.provider, message
-            ))
+            // 非标准 provider：根据 api_format 选择调用方式
+            match model_config.api_format.as_str() {
+                "openai-chat-completions" => {
+                    if model_config.api_endpoint.is_empty() {
+                        Err("请配置 API 端点地址".to_string())
+                    } else {
+                        call_openai_compatible_api(model_config, &messages).await
+                    }
+                }
+                _ => {
+                    Err(format!("不支持的 API 格式: '{}'，当前仅支持 openai-chat-completions", model_config.api_format))
+                }
+            }
         }
     }
 }

@@ -1,7 +1,6 @@
 // 模型配置
 export interface ModelConfig {
   id: string;
-  name: string;
   provider: string;
   enabled: boolean;
   status: 'available' | 'unavailable' | 'unknown';

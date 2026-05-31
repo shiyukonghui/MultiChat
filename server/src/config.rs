@@ -15,8 +15,6 @@ pub struct AppConfig {
 pub struct ModelConfig {
     /// 模型唯一标识
     pub id: String,
-    /// 模型显示名称
-    pub name: String,
     /// 服务提供商 (openai / anthropic / ...)
     pub provider: String,
     /// 具体模型名称
@@ -125,7 +123,7 @@ pub fn load_config() -> Result<AppConfig, Box<dyn std::error::Error>> {
 
         tracing::info!(
             "模型 [{}] (provider: {}) API Key: {}",
-            model.name,
+            model.id,
             model.provider,
             masked_key
         );

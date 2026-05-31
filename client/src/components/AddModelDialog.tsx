@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -27,11 +27,13 @@ import LinkIcon from '@mui/icons-material/Link';
 import type { ModelFormData, ModelConfig } from '../types';
 import { DEFAULT_MODEL_FORM_DATA, API_FORMAT_OPTIONS, MODEL_SERIES_OPTIONS } from '../types';
 
-// 添加模型弹窗组件属性
-interface AddModelDialogProps {
+// 模型配置弹窗组件属性
+interface ModelConfigDialogProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (model: Omit<ModelConfig, 'status' | 'reason'>) => void;
+  onUpdate?: (id: string, model: Omit<ModelConfig, 'status' | 'reason'>) => void;
+  editModel?: ModelConfig | null;
 }
 
 // Tab 面板组件
@@ -57,14 +59,46 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-// 添加模型弹窗组件
-export default function AddModelDialog({ open, onClose, onSubmit }: AddModelDialogProps) {
+// 将 ModelConfig 转换为 ModelFormData
+function modelToFormData(model: ModelConfig): ModelFormData {
+  return {
+    id: model.id,
+    apiFormat: model.apiFormat,
+    apiEndpoint: model.apiEndpoint,
+    apiKey: model.apiKey || '',
+    isMultimodal: model.isMultimodal,
+    modelSeries: model.modelSeries || 'default',
+    displayName: model.displayName || '',
+    contextWindowInput: model.contextWindowInput || 184000,
+    contextWindowOutput: model.contextWindowOutput || 16000,
+    toolCallRounds: model.toolCallRounds || 200,
+    useFullUrl: model.useFullUrl,
+    configMode: 'custom',
+    provider: model.provider === 'custom' ? '' : model.provider,
+  };
+}
+
+// 模型配置弹窗组件（支持添加和编辑两种模式）
+export default function ModelConfigDialog({ open, onClose, onSubmit, onUpdate, editModel }: ModelConfigDialogProps) {
+  const isEditMode = !!editModel;
+
   // 表单数据状态
   const [formData, setFormData] = useState<ModelFormData>(DEFAULT_MODEL_FORM_DATA);
   // 表单验证错误
   const [errors, setErrors] = useState<Record<string, string>>({});
   // 当前选中的 Tab
-  const [tabValue, setTabValue] = useState(1); // 默认选中"自定义配置"
+  const [tabValue, setTabValue] = useState(1);
+
+  // 当 editModel 变化时回填表单
+  useEffect(() => {
+    if (editModel) {
+      setFormData(modelToFormData(editModel));
+      setErrors({});
+    } else {
+      setFormData(DEFAULT_MODEL_FORM_DATA);
+      setErrors({});
+    }
+  }, [editModel, open]);
 
   // 处理字段变化
   const handleChange = useCallback((field: keyof ModelFormData, value: unknown) => {
@@ -72,7 +106,6 @@ export default function AddModelDialog({ open, onClose, onSubmit }: AddModelDial
       ...prev,
       [field]: value,
     }));
-    // 清除该字段的错误
     if (errors[field]) {
       setErrors((prev) => {
         const newErrors = { ...prev };
@@ -85,7 +118,6 @@ export default function AddModelDialog({ open, onClose, onSubmit }: AddModelDial
   // 处理 Tab 切换
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
-    // 更新 configMode
     setFormData((prev) => ({
       ...prev,
       configMode: newValue === 0 ? 'provider' : 'custom',
@@ -96,7 +128,6 @@ export default function AddModelDialog({ open, onClose, onSubmit }: AddModelDial
   const validateForm = useCallback((): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // 必填字段验证
     if (!formData.id.trim()) {
       newErrors.id = '请输入模型 ID';
     }
@@ -119,12 +150,10 @@ export default function AddModelDialog({ open, onClose, onSubmit }: AddModelDial
       return;
     }
 
-    // 构建模型配置对象
     const modelConfig: Omit<ModelConfig, 'status' | 'reason'> = {
       id: formData.id,
-      name: formData.displayName || formData.id, // 如果没有展示名称，使用模型ID
       provider: formData.configMode === 'provider' ? formData.provider || 'custom' : 'custom',
-      enabled: true,
+      enabled: editModel ? editModel.enabled : true,
       apiFormat: formData.apiFormat,
       apiEndpoint: formData.apiEndpoint,
       apiKey: formData.apiKey,
@@ -137,11 +166,15 @@ export default function AddModelDialog({ open, onClose, onSubmit }: AddModelDial
       useFullUrl: formData.useFullUrl,
     };
 
-    onSubmit(modelConfig);
-    // 重置表单
+    if (isEditMode && onUpdate && editModel) {
+      onUpdate(editModel.id, modelConfig);
+    } else {
+      onSubmit(modelConfig);
+    }
+
     setFormData(DEFAULT_MODEL_FORM_DATA);
     setErrors({});
-  }, [formData, validateForm, onSubmit]);
+  }, [formData, validateForm, onSubmit, onUpdate, isEditMode, editModel]);
 
   // 关闭弹窗
   const handleClose = useCallback(() => {
@@ -152,7 +185,7 @@ export default function AddModelDialog({ open, onClose, onSubmit }: AddModelDial
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ pb: 1 }}>添加模型</DialogTitle>
+      <DialogTitle sx={{ pb: 1 }}>{isEditMode ? '编辑模型' : '添加模型'}</DialogTitle>
       <DialogContent sx={{ pt: 0 }}>
         {/* Tab 切换 */}
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -274,7 +307,13 @@ export default function AddModelDialog({ open, onClose, onSubmit }: AddModelDial
                 onChange={(e) => handleChange('id', e.target.value)}
                 error={!!errors.id}
                 helperText={errors.id}
+                disabled={isEditMode}
               />
+              {isEditMode && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  模型 ID 创建后不可修改
+                </Typography>
+              )}
             </Box>
 
             {/* API 密钥 */}
@@ -285,7 +324,7 @@ export default function AddModelDialog({ open, onClose, onSubmit }: AddModelDial
               <TextField
                 fullWidth
                 type="password"
-                placeholder="输入 API 密钥"
+                placeholder={isEditMode ? '留空则保持原密钥不变' : '输入 API 密钥'}
                 value={formData.apiKey}
                 onChange={(e) => handleChange('apiKey', e.target.value)}
                 error={!!errors.apiKey}
@@ -402,7 +441,7 @@ export default function AddModelDialog({ open, onClose, onSubmit }: AddModelDial
           onClick={handleSubmit}
           disabled={tabValue === 0 && !formData.provider}
         >
-          添加模型
+          {isEditMode ? '保存修改' : '添加模型'}
         </Button>
       </DialogActions>
     </Dialog>

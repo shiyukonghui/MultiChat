@@ -116,7 +116,7 @@ export default function ModelSidebar({
 
               {/* 模型名称和描述 */}
               <ListItemText
-                primary={model.name || modelId}
+                primary={modelId}
                 secondary={
                   hasError
                     ? model.error || '回复异常'
