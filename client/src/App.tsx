@@ -1,4 +1,4 @@
-import { useState, useCallback, Component, type ErrorInfo, type ReactNode } from 'react';
+import { useState, useCallback, useEffect, Component, type ErrorInfo, type ReactNode } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Box from '@mui/material/Box';
@@ -19,13 +19,18 @@ import CircularProgress from '@mui/material/CircularProgress';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import SettingsIcon from '@mui/icons-material/Settings';
+import HistoryIcon from '@mui/icons-material/History';
+import SaveIcon from '@mui/icons-material/Save';
 
 import { useChatStream } from './hooks/useChatStream';
 import ChatInput from './components/ChatInput';
 import ModelSidebar from './components/ModelSidebar';
 import StreamingResponse from './components/StreamingResponse';
 import ModelConfigPanel from './pages/ModelConfigPanel';
-import type { ChatMessage } from './types';
+import HistorySidebar from './components/HistorySidebar';
+import SaveHistoryDialog from './components/SaveHistoryDialog';
+import { fetchHistories, saveHistory, deleteHistory } from './utils/api';
+import type { ChatMessage, HistoryRecord } from './types';
 
 // 侧边栏宽度常量
 const DRAWER_WIDTH = 280;
@@ -133,7 +138,7 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
 
 function App() {
   // 对话状态管理（SSE 流式接收 + useReducer）
-  const { state, sendMessage, selectModel, resetSession, refreshModels } = useChatStream();
+  const { state, sendMessage, selectModel, resetSession, refreshModels, loadHistory } = useChatStream();
 
   // 模型配置对话框状态
   const [configOpen, setConfigOpen] = useState(false);
@@ -144,6 +149,17 @@ function App() {
     open: false,
     message: '',
   });
+
+  // 历史记录侧边栏状态
+  const [historySidebarOpen, setHistorySidebarOpen] = useState(false);
+  // 历史记录列表
+  const [histories, setHistories] = useState<HistoryRecord[]>([]);
+  // 保存历史记录对话框状态
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  // 恢复历史记录确认对话框状态
+  const [loadHistoryConfirmOpen, setLoadHistoryConfirmOpen] = useState(false);
+  // 待恢复的历史记录
+  const [pendingHistory, setPendingHistory] = useState<HistoryRecord | null>(null);
 
   // 当前选中的模型状态
   const selectedModelStatus = state.selectedModel
@@ -177,6 +193,74 @@ function App() {
     setSnackbar({ open: true, message: '会话已清空' });
   }, [resetSession]);
 
+  // 加载历史记录列表
+  const loadHistories = useCallback(async () => {
+    try {
+      const data = await fetchHistories();
+      setHistories(data);
+    } catch (error) {
+      console.error('加载历史记录失败:', error);
+    }
+  }, []);
+
+  // 监听侧边栏打开时加载历史记录
+  useEffect(() => {
+    if (historySidebarOpen) {
+      loadHistories();
+    }
+  }, [historySidebarOpen, loadHistories]);
+
+  // 处理保存历史记录
+  const handleSaveHistory = useCallback(async (name: string) => {
+    try {
+      await saveHistory({
+        name,
+        selectedModel: state.selectedModel,
+        messages: state.messages,
+      });
+      setSnackbar({ open: true, message: '已保存到历史记录' });
+      loadHistories(); // 刷新列表
+    } catch (error) {
+      setSnackbar({ open: true, message: '保存失败' });
+    }
+  }, [state.selectedModel, state.messages, loadHistories]);
+
+  // 处理选择历史记录
+  const handleSelectHistory = useCallback((history: HistoryRecord) => {
+    if (state.messages.length > 0) {
+      // 如果有未保存的对话，显示确认对话框
+      setPendingHistory(history);
+      setLoadHistoryConfirmOpen(true);
+    } else {
+      // 直接恢复
+      loadHistory(history.messages, history.selectedModel);
+      setHistorySidebarOpen(false);
+      setSnackbar({ open: true, message: '已加载历史记录' });
+    }
+  }, [state.messages.length, loadHistory]);
+
+  // 确认加载历史记录
+  const confirmLoadHistory = useCallback(() => {
+    if (pendingHistory) {
+      loadHistory(pendingHistory.messages, pendingHistory.selectedModel);
+      setPendingHistory(null);
+      setLoadHistoryConfirmOpen(false);
+      setHistorySidebarOpen(false);
+      setSnackbar({ open: true, message: '已加载历史记录' });
+    }
+  }, [pendingHistory, loadHistory]);
+
+  // 处理删除历史记录
+  const handleDeleteHistory = useCallback(async (id: string) => {
+    try {
+      await deleteHistory(id);
+      setHistories(prev => prev.filter(h => h.id !== id));
+      setSnackbar({ open: true, message: '已删除历史记录' });
+    } catch (error) {
+      setSnackbar({ open: true, message: '删除失败' });
+    }
+  }, []);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -204,6 +288,29 @@ function App() {
                     >
                       新建
                     </Button>
+                  </span>
+                </Tooltip>
+                <Tooltip title="保存当前会话">
+                  <span>
+                    <IconButton
+                      color="inherit"
+                      onClick={() => setSaveDialogOpen(true)}
+                      disabled={state.isLoading || state.messages.length === 0}
+                      size="small"
+                    >
+                      <SaveIcon />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title="历史记录">
+                  <span>
+                    <IconButton
+                      color="inherit"
+                      onClick={() => setHistorySidebarOpen(true)}
+                      size="small"
+                    >
+                      <HistoryIcon />
+                    </IconButton>
                   </span>
                 </Tooltip>
                 <Tooltip title="清空当前会话">
@@ -372,6 +479,38 @@ function App() {
             <Button onClick={() => setClearDialogOpen(false)}>取消</Button>
             <Button onClick={handleClearSession} color="error" variant="contained">
               确认清空
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* ========== 历史记录侧边栏 ========== */}
+        <HistorySidebar
+          open={historySidebarOpen}
+          onClose={() => setHistorySidebarOpen(false)}
+          histories={histories}
+          onSelectHistory={handleSelectHistory}
+          onDeleteHistory={handleDeleteHistory}
+        />
+
+        {/* ========== 保存历史记录对话框 ========== */}
+        <SaveHistoryDialog
+          open={saveDialogOpen}
+          onClose={() => setSaveDialogOpen(false)}
+          onSave={handleSaveHistory}
+        />
+
+        {/* ========== 恢复历史记录确认对话框 ========== */}
+        <Dialog open={loadHistoryConfirmOpen} onClose={() => setLoadHistoryConfirmOpen(false)}>
+          <DialogTitle>确认加载历史记录</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1">
+              当前会话将被替换为选中的历史记录，未保存的内容将丢失。
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setLoadHistoryConfirmOpen(false)}>取消</Button>
+            <Button onClick={confirmLoadHistory} color="primary" variant="contained">
+              确认
             </Button>
           </DialogActions>
         </Dialog>

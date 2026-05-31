@@ -2,6 +2,7 @@
 // 定义 API 请求/响应结构体以及应用共享状态
 
 use crate::config::ModelConfig;
+use crate::history::HistoryRecord;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -134,6 +135,8 @@ fn default_true() -> bool {
 pub struct AppState {
     /// 模型配置列表，支持并发读写
     pub models: Arc<RwLock<Vec<ModelConfig>>>,
+    /// 历史记录列表，支持并发读写
+    pub histories: Arc<RwLock<Vec<HistoryRecord>>>,
 }
 
 /// 对话消息（用于携带对话历史）

@@ -125,4 +125,14 @@ export type ChatAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_RECONNECTING'; payload: boolean }
   | { type: 'INIT_MODELS'; payload: string[] }
-  | { type: 'REFRESH_MODELS'; payload: string[] };
+  | { type: 'REFRESH_MODELS'; payload: string[] }
+  | { type: 'LOAD_HISTORY'; payload: { messages: ChatMessage[]; selectedModel: string | null } };
+
+// 历史记录
+export interface HistoryRecord {
+  id: string;
+  name: string;
+  timestamp: number;
+  selectedModel: string | null;
+  messages: ChatMessage[];
+}

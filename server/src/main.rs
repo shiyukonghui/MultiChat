@@ -3,6 +3,7 @@
 
 mod config;
 mod gateway;
+mod history;
 mod models;
 mod routes;
 
@@ -84,18 +85,34 @@ async fn main() {
         .into_iter()
         .collect();
 
-    // ========== 3. 创建全局共享状态 ==========
-    let state = AppState {
-        models: Arc::new(RwLock::new(app_config.models)),
+    // ========== 3. 加载历史记录 ==========
+    let histories = match history::load_histories() {
+        Ok(h) => {
+            tracing::info!("已加载历史记录: {} 条", h.len());
+            h
+        }
+        Err(e) => {
+            tracing::warn!("加载历史记录失败: {}，将使用空列表", e);
+            Vec::new()
+        }
     };
 
-    // ========== 4. 配置 CORS（开发阶段允许所有来源） ==========
+    // 获取历史记录数量（在 state 被 move 之前）
+    let history_count = histories.len();
+
+    // ========== 4. 创建全局共享状态 ==========
+    let state = AppState {
+        models: Arc::new(RwLock::new(app_config.models)),
+        histories: Arc::new(RwLock::new(histories)),
+    };
+
+    // ========== 5. 配置 CORS（开发阶段允许所有来源） ==========
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
         .allow_headers(Any);
 
-    // ========== 5. 构建路由 ==========
+    // ========== 6. 构建路由 ==========
     // 通过 routes 模块统一管理所有 API 路由
     let app = routes::create_router()
         // 认证中间件（V1.0 预留，暂不强制）
@@ -105,7 +122,7 @@ async fn main() {
         .layer(cors)
         .with_state(state);
 
-    // ========== 6. 打印启动日志 ==========
+    // ========== 7. 打印启动日志 ==========
     tracing::info!("========================================");
     tracing::info!("  多模型聊天后端服务 启动中...");
     tracing::info!("========================================");
@@ -116,12 +133,16 @@ async fn main() {
         enabled_count
     );
     tracing::info!(
+        "已加载历史记录: {} 条",
+        history_count
+    );
+    tracing::info!(
         "服务提供商: {:?}",
         providers
     );
     tracing::info!("========================================");
 
-    // ========== 7. 启动 HTTP 服务 ==========
+    // ========== 8. 启动 HTTP 服务 ==========
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3001").await.unwrap();
 
     if let Err(e) = axum::serve(listener, app).await {

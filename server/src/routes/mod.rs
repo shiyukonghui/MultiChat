@@ -2,10 +2,11 @@
 // 定义所有 API 路由并统一创建 Router
 
 pub mod chat;
+pub mod history;
 pub mod models;
 
 use axum::{
-    routing::{delete, get, post, put},
+    routing::{get, put},
     Router,
 };
 use crate::models::AppState;
@@ -16,10 +17,17 @@ use crate::models::AppState;
 ///   POST  /api/models       - 创建新模型
 ///   PUT   /api/models/{id}  - 更新模型配置
 ///   DELETE /api/models/{id} - 删除模型
+///   GET   /api/histories    - 获取历史记录列表
+///   POST  /api/histories    - 创建新历史记录
+///   GET   /api/histories/:id - 获取历史记录详情
+///   PUT   /api/histories/:id - 更新历史记录
+///   DELETE /api/histories/:id - 删除历史记录
 ///   GET   /api/chat/stream  - SSE 流式对话
 pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/api/models", get(models::get_models).post(models::create_model))
         .route("/api/models/:id", put(models::update_model).delete(models::delete_model))
+        .route("/api/histories", get(history::get_histories).post(history::create_history))
+        .route("/api/histories/:id", get(history::get_history_detail).put(history::update_history).delete(history::delete_history))
         .route("/api/chat/stream", get(chat::chat_stream_handler))
 }

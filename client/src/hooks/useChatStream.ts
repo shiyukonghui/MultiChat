@@ -10,6 +10,7 @@ interface UseChatStreamReturn {
   selectModel: (model: string) => void;
   resetSession: () => void;
   refreshModels: () => Promise<void>;
+  loadHistory: (messages: ChatMessage[], selectedModel: string | null) => void;
 }
 
 // SSE 流式对话管理 Hook
@@ -185,5 +186,12 @@ export function useChatStream(): UseChatStreamReturn {
     }
   }, []);
 
-  return { state, sendMessage, selectModel, resetSession, refreshModels };
+  // 从历史记录恢复会话
+  const loadHistory = useCallback((messages: ChatMessage[], selectedModel: string | null) => {
+    isResettingRef.current = true;
+    closeConnection();
+    dispatch({ type: 'LOAD_HISTORY', payload: { messages, selectedModel } });
+  }, [closeConnection]);
+
+  return { state, sendMessage, selectModel, resetSession, refreshModels, loadHistory };
 }

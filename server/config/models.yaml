@@ -1,0 +1,17 @@
+models:
+  - id: gpt-4o-mini
+    provider: openai
+    model: gpt-4o-mini
+    enabled: true
+    timeout_seconds: 60
+    max_tokens: 4096
+    status: active
+    api_key: ""
+    api_format: openai-chat-completions
+    api_endpoint: "https://api.openai.com/v1/chat/completions"
+    is_multimodal: true
+    model_series: gpt-4
+    context_window_input: 128000
+    context_window_output: 4096
+    tool_call_rounds: 200
+    use_full_url: false

@@ -207,6 +207,19 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...initialChatState };
     }
 
+    // 从历史记录恢复会话
+    case 'LOAD_HISTORY': {
+      const { messages, selectedModel } = action.payload;
+      saveHistoryToStorage(messages);
+      return {
+        ...state,
+        messages,
+        selectedModel,
+        modelStatuses: {},
+        isLoading: false,
+      };
+    }
+
     default:
       return state;
   }
