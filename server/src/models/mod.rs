@@ -65,6 +65,7 @@ pub struct UpdateModelRequest {
 
 /// 创建模型的请求体
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateModelRequest {
     /// 模型唯一标识
     pub id: String,

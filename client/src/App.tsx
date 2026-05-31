@@ -133,7 +133,7 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
 
 function App() {
   // 对话状态管理（SSE 流式接收 + useReducer）
-  const { state, sendMessage, selectModel, resetSession } = useChatStream();
+  const { state, sendMessage, selectModel, resetSession, refreshModels } = useChatStream();
 
   // 模型配置对话框状态
   const [configOpen, setConfigOpen] = useState(false);
@@ -309,10 +309,9 @@ function App() {
                   <ChatMessageBubble key={index} message={message} />
                 ))}
 
-              {/* 当前选中模型的流式/已完成回复 */}
+              {/* 当前选中模型的流式回复 */}
               {selectedModelStatus &&
-                (selectedModelStatus.status === 'streaming' ||
-                  selectedModelStatus.status === 'done') && (
+                selectedModelStatus.status === 'streaming' && (
                   <Box sx={{ mb: 2 }}>
                     <StreamingResponse modelStatus={selectedModelStatus} />
                   </Box>
@@ -354,7 +353,7 @@ function App() {
         >
           <DialogTitle>模型配置管理</DialogTitle>
           <DialogContent sx={{ p: 0 }}>
-            <ModelConfigPanel />
+            <ModelConfigPanel onModelsChange={refreshModels} />
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setConfigOpen(false)}>关闭</Button>

@@ -170,6 +170,37 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     }
 
+    // 刷新模型列表：添加新增模型，移除已禁用的空状态模型
+    case 'REFRESH_MODELS': {
+      const modelIds = action.payload;
+      const newStatuses = { ...state.modelStatuses };
+
+      // 添加新增模型为 pending 状态
+      modelIds.forEach((id) => {
+        if (!newStatuses[id]) {
+          newStatuses[id] = {
+            id,
+            name: id,
+            provider: '',
+            content: '',
+            status: 'pending',
+          };
+        }
+      });
+
+      // 移除已被禁用且从未有内容的模型（pending 状态且内容为空）
+      Object.keys(newStatuses).forEach((id) => {
+        if (!modelIds.includes(id)) {
+          const status = newStatuses[id];
+          if (status.status === 'pending' && !status.content) {
+            delete newStatuses[id];
+          }
+        }
+      });
+
+      return { ...state, modelStatuses: newStatuses };
+    }
+
     // 重置会话：清空所有状态并持久化空历史
     case 'RESET': {
       saveHistoryToStorage([]);

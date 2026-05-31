@@ -23,7 +23,11 @@ import type { ModelConfig } from '../types';
 
 // 模型配置管理页面组件
 // 展示所有模型列表，支持启用/禁用切换，添加新模型
-export default function ModelConfigPanel() {
+interface ModelConfigPanelProps {
+  onModelsChange?: () => void;
+}
+
+export default function ModelConfigPanel({ onModelsChange }: ModelConfigPanelProps) {
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +65,7 @@ export default function ModelConfigPanel() {
       setModels((prev) =>
         prev.map((m) => (m.id === id ? { ...m, enabled } : m))
       );
+      onModelsChange?.();
       setSnackbar({
         open: true,
         message: `${enabled ? '已启用' : '已禁用'}模型`,
@@ -83,6 +88,7 @@ export default function ModelConfigPanel() {
       // 添加新模型到列表
       setModels((prev) => [...prev, newModel]);
       setDialogOpen(false);
+      onModelsChange?.();
       setSnackbar({
         open: true,
         message: '模型添加成功',

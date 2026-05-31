@@ -1,6 +1,6 @@
 import { useReducer, useRef, useCallback } from 'react';
 import { chatReducer, initialChatState, loadHistoryFromStorage } from '../utils/chatReducer';
-import { createChatStreamUrl } from '../utils/api';
+import { createChatStreamUrl, fetchModels } from '../utils/api';
 import type { ChatMessage, ChatState, SSEChunkData, SSEDoneData, SSEErrorData } from '../types';
 
 // useChatStream 返回类型
@@ -9,6 +9,7 @@ interface UseChatStreamReturn {
   sendMessage: (message: string) => void;
   selectModel: (model: string) => void;
   resetSession: () => void;
+  refreshModels: () => Promise<void>;
 }
 
 // SSE 流式对话管理 Hook
@@ -21,6 +22,22 @@ export function useChatStream(): UseChatStreamReturn {
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const isResettingRef = useRef(false);
+  // 记录已完成的模型 ID 集合，所有模型完成后主动关闭连接
+  const completedRef = useRef<Set<string> | null>(null);
+  const totalModelsRef = useRef(0);
+
+  // 检查是否所有模型都已完成，若是则关闭连接
+  const checkAllCompleted = useCallback((currentEventSource: EventSource | null) => {
+    const completed = completedRef.current;
+    const total = totalModelsRef.current;
+    if (completed && total > 0 && completed.size >= total) {
+      // 所有模型都已回复完成，主动关闭连接
+      if (currentEventSource) {
+        currentEventSource.close();
+      }
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, []);
 
   // 关闭当前 SSE 连接
   const closeConnection = useCallback(() => {
@@ -36,12 +53,23 @@ export function useChatStream(): UseChatStreamReturn {
       // 关闭之前可能存在的连接
       closeConnection();
 
+      // 重置完成计数
+      completedRef.current = new Set();
+      totalModelsRef.current = 0;
+
       // 标记未在重置流程中
       isResettingRef.current = false;
 
       // 添加用户消息到对话历史
       const userMsg: ChatMessage = { role: 'user', content: message };
       dispatch({ type: 'SEND_MESSAGE', payload: userMsg });
+
+      // 预先获取已启用模型数量，用于判断全部完成
+      fetchModels().then((models) => {
+        totalModelsRef.current = models.filter((m) => m.enabled).length;
+      }).catch(() => {
+        totalModelsRef.current = 0;
+      });
 
       // 序列化对话历史（包含刚添加的用户消息）
       const messages = [...state.messages, userMsg];
@@ -87,6 +115,9 @@ export function useChatStream(): UseChatStreamReturn {
             type: 'MODEL_DONE',
             payload: { model: data.model, content: data.content },
           });
+          // 记录该模型已完成，检查是否全部完成
+          completedRef.current?.add(data.model);
+          checkAllCompleted(eventSource);
         } catch (e) {
           console.error('解析 done 事件失败:', e);
         }
@@ -102,12 +133,16 @@ export function useChatStream(): UseChatStreamReturn {
               type: 'MODEL_ERROR',
               payload: { model: data.model, error: data.error.userMessage },
             });
+            // 记录该模型已完成（错误也算完成），检查是否全部完成
+            completedRef.current?.add(data.model);
+            checkAllCompleted(eventSource);
             return;
           } catch (e) {
             console.error('解析 error 事件失败:', e);
           }
         }
-        // 连接级别错误：EventSource 连接中断
+        // 连接级别错误：EventSource 连接中断，不做额外处理
+        // 所有模型完成时会主动 close，不会走到这里
         if (!isResettingRef.current && eventSource.readyState === EventSource.CLOSED) {
           dispatch({ type: 'SET_LOADING', payload: false });
         }
@@ -117,12 +152,12 @@ export function useChatStream(): UseChatStreamReturn {
         }
       });
 
-      // SSE 连接建立成功（含重连成功）
+      // SSE 连接建立成功（含重连成功），从响应头获取模型数量
       eventSource.addEventListener('open', () => {
         dispatch({ type: 'SET_RECONNECTING', payload: false });
       });
     },
-    [state.messages, closeConnection]
+    [state.messages, closeConnection, checkAllCompleted]
   );
 
   // 选择要查看的模型回复
@@ -137,5 +172,18 @@ export function useChatStream(): UseChatStreamReturn {
     dispatch({ type: 'RESET' });
   }, [closeConnection]);
 
-  return { state, sendMessage, selectModel, resetSession };
+  // 刷新模型列表：从后端获取已启用的模型并更新侧边栏
+  const refreshModels = useCallback(async () => {
+    try {
+      const models = await fetchModels();
+      const enabledIds = models
+        .filter((m) => m.enabled)
+        .map((m) => m.id);
+      dispatch({ type: 'REFRESH_MODELS', payload: enabledIds });
+    } catch (e) {
+      console.error('刷新模型列表失败:', e);
+    }
+  }, []);
+
+  return { state, sendMessage, selectModel, resetSession, refreshModels };
 }

@@ -6,6 +6,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use crate::config;
 use crate::config::ModelConfig;
 use crate::models::{AppState, ModelConfigResponse, UpdateModelRequest, CreateModelRequest};
 
@@ -60,6 +61,12 @@ pub async fn update_model(
     let mut models = state.models.write().await;
     if let Some(model) = models.iter_mut().find(|m| m.id == id) {
         model.enabled = body.enabled;
+
+        // 持久化到 YAML 文件
+        if let Err(e) = config::save_config(&models) {
+            tracing::warn!("保存模型配置到文件失败: {}", e);
+        }
+
         Ok(Json(serde_json::json!({
             "id": id,
             "enabled": body.enabled
@@ -109,6 +116,11 @@ pub async fn create_model(
     // 添加到模型列表
     let mut models_guard = state.models.write().await;
     models_guard.push(new_model.clone());
+
+    // 持久化到 YAML 文件
+    if let Err(e) = config::save_config(&models_guard) {
+        tracing::warn!("保存新模型到配置文件失败: {}", e);
+    }
 
     // 构建响应
     let response = ModelConfigResponse {

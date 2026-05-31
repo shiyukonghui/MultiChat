@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// 应用配置顶层结构
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,8 +33,8 @@ pub struct ModelConfig {
     /// 模型状态（例如 "active" 或 "inactive"）
     #[serde(default = "default_status")]
     pub status: String,
-    /// API Key，不从 YAML 读取，从环境变量注入
-    #[serde(skip)]
+    /// API Key，直接保存到 YAML 文件
+    #[serde(default)]
     pub api_key: String,
 
     // 新增字段
@@ -104,22 +104,17 @@ fn default_tool_call_rounds() -> u32 {
     200
 }
 
-/// 从 YAML 文件加载配置，并从环境变量读取各 provider 的 API Key
+/// 从 YAML 文件加载配置
 pub fn load_config() -> Result<AppConfig, Box<dyn std::error::Error>> {
     // 定位配置文件路径（相对于项目根目录的 server 目录）
     let config_path = Path::new("config/models.yaml");
 
     // 读取并解析 YAML 文件
     let yaml_content = fs::read_to_string(config_path)?;
-    let mut config: AppConfig = serde_yaml::from_str(&yaml_content)?;
+    let config: AppConfig = serde_yaml::from_str(&yaml_content)?;
 
-    // 为每个模型从环境变量加载对应的 API Key
-    for model in &mut config.models {
-        // 环境变量命名规则：LLM_API_KEY_ + Provider 名大写
-        let env_var_name = format!("LLM_API_KEY_{}", model.provider.to_uppercase());
-        model.api_key = std::env::var(&env_var_name).unwrap_or_default();
-
-        // 日志脱敏输出：只显示前 4 位 + "****"
+    // 日志输出各模型的配置情况
+    for model in &config.models {
         let masked_key = if model.api_key.len() > 4 {
             format!("{}****", &model.api_key[..4])
         } else if model.api_key.is_empty() {
@@ -137,4 +132,19 @@ pub fn load_config() -> Result<AppConfig, Box<dyn std::error::Error>> {
     }
 
     Ok(config)
+}
+
+/// 获取配置文件路径
+pub fn get_config_path() -> PathBuf {
+    Path::new("config/models.yaml").to_path_buf()
+}
+
+/// 保存模型配置到 YAML 文件
+pub fn save_config(models: &[ModelConfig]) -> Result<(), Box<dyn std::error::Error>> {
+    let config = AppConfig {
+        models: models.to_vec(),
+    };
+    let yaml_content = serde_yaml::to_string(&config)?;
+    fs::write(get_config_path(), yaml_content)?;
+    Ok(())
 }

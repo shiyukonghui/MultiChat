@@ -125,4 +125,5 @@ export type ChatAction =
   | { type: 'RESET' }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_RECONNECTING'; payload: boolean }
-  | { type: 'INIT_MODELS'; payload: string[] };
+  | { type: 'INIT_MODELS'; payload: string[] }
+  | { type: 'REFRESH_MODELS'; payload: string[] };
