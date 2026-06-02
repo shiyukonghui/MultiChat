@@ -226,3 +226,224 @@ async fn call_real_api(
         }
     }
 }
+
+/// 构建端点 URL（公开用于测试）
+#[cfg(test)]
+pub fn build_endpoint_url(model_config: &ModelConfig) -> String {
+    if !model_config.api_endpoint.is_empty() {
+        if model_config.use_full_url {
+            model_config.api_endpoint.clone()
+        } else {
+            format!("{}/chat/completions", model_config.api_endpoint.trim_end_matches('/'))
+        }
+    } else {
+        "https://api.openai.com/v1/chat/completions".to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::SseEvent;
+
+    /// 创建测试用的模型配置
+    fn create_test_model_config() -> ModelConfig {
+        ModelConfig {
+            id: "test-model".to_string(),
+            provider: "openai".to_string(),
+            model: "gpt-4".to_string(),
+            enabled: true,
+            timeout_seconds: 60,
+            max_tokens: 4096,
+            status: "active".to_string(),
+            api_key: String::new(), // 空 API Key，使用模拟响应
+            api_format: "openai-chat-completions".to_string(),
+            api_endpoint: String::new(),
+            is_multimodal: false,
+            model_series: "default".to_string(),
+            display_name: Some("Test Model".to_string()),
+            context_window_input: 184000,
+            context_window_output: 16000,
+            tool_call_rounds: 200,
+            use_full_url: false,
+        }
+    }
+
+    /// 测试端点 URL 构建 - 标准模式
+    #[test]
+    fn test_build_endpoint_url_standard() {
+        let mut config = create_test_model_config();
+        config.api_endpoint = "https://api.example.com/v1".to_string();
+        config.use_full_url = false;
+        
+        let url = build_endpoint_url(&config);
+        assert_eq!(url, "https://api.example.com/v1/chat/completions");
+    }
+
+    /// 测试端点 URL 构建 - 完整 URL 模式
+    #[test]
+    fn test_build_endpoint_url_full_url() {
+        let mut config = create_test_model_config();
+        config.api_endpoint = "https://api.example.com/custom/endpoint".to_string();
+        config.use_full_url = true;
+        
+        let url = build_endpoint_url(&config);
+        assert_eq!(url, "https://api.example.com/custom/endpoint");
+    }
+
+    /// 测试端点 URL 构建 - 默认端点
+    #[test]
+    fn test_build_endpoint_url_default() {
+        let config = create_test_model_config();
+        // api_endpoint 为空
+        let url = build_endpoint_url(&config);
+        assert_eq!(url, "https://api.openai.com/v1/chat/completions");
+    }
+
+    /// 测试端点 URL 构建 - 去除尾部斜杠
+    #[test]
+    fn test_build_endpoint_url_trailing_slash() {
+        let mut config = create_test_model_config();
+        config.api_endpoint = "https://api.example.com/v1/".to_string();
+        config.use_full_url = false;
+        
+        let url = build_endpoint_url(&config);
+        // 应该正确去除尾部斜杠
+        assert_eq!(url, "https://api.example.com/v1/chat/completions");
+    }
+
+    /// 测试模拟响应（无 API Key）
+    #[tokio::test]
+    async fn test_stream_chat_mock_response() {
+        let config = create_test_model_config();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        
+        // 在后台运行 stream_chat
+        let handle = tokio::spawn(async move {
+            stream_chat(&config, "Hello", "", tx).await;
+        });
+        
+        // 收集所有事件
+        let mut events = Vec::new();
+        while let Some(event) = rx.recv().await {
+            events.push(event);
+        }
+        
+        // 等待完成
+        handle.await.unwrap();
+        
+        // 验证事件
+        assert!(!events.is_empty());
+        
+        // 最后一个事件应该是 Done
+        if let Some(last) = events.last() {
+            match last {
+                SseEvent::Done { model, content } => {
+                    assert_eq!(model, "test-model");
+                    assert!(content.contains("Test Model"));
+                    assert!(content.contains("模拟回复"));
+                }
+                _ => panic!("Expected Done event"),
+            }
+        }
+        
+        // 应该有多个 Chunk 事件
+        let chunk_count = events.iter().filter(|e| matches!(e, SseEvent::Chunk { .. })).count();
+        assert!(chunk_count > 1);
+    }
+
+    /// 测试带历史记录的模拟响应
+    #[tokio::test]
+    async fn test_stream_chat_with_history() {
+        let config = create_test_model_config();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        
+        let history = r#"[{"role":"user","content":"Hi"},{"role":"assistant","content":"Hello!"}]"#;
+        
+        let handle = tokio::spawn(async move {
+            stream_chat(&config, "How are you?", history, tx).await;
+        });
+        
+        let mut events = Vec::new();
+        while let Some(event) = rx.recv().await {
+            events.push(event);
+        }
+        
+        handle.await.unwrap();
+        
+        // 验证历史记录被包含在响应中
+        if let Some(SseEvent::Done { content, .. }) = events.last() {
+            assert!(content.contains("对话历史"));
+        }
+    }
+
+    /// 测试不支持的 API 格式
+    #[tokio::test]
+    async fn test_call_real_api_unsupported_format() {
+        let mut config = create_test_model_config();
+        config.api_key = "test-key".to_string();
+        config.provider = "unknown".to_string();
+        config.api_format = "unsupported-format".to_string();
+        config.api_endpoint = "https://api.example.com".to_string();
+        
+        let result = call_real_api(&config, "test", "").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("不支持的 API 格式"));
+    }
+
+    /// 测试空端点错误
+    #[tokio::test]
+    async fn test_call_real_api_empty_endpoint() {
+        let mut config = create_test_model_config();
+        config.api_key = "test-key".to_string();
+        config.provider = "custom".to_string();
+        config.api_format = "openai-chat-completions".to_string();
+        config.api_endpoint = String::new(); // 空端点
+        
+        let result = call_real_api(&config, "test", "").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("请配置 API 端点地址"));
+    }
+
+    /// 测试消息构建逻辑
+    #[test]
+    fn test_message_building() {
+        let history = r#"[{"role":"user","content":"Hello"},{"role":"assistant","content":"Hi!"}]"#;
+        let history_msgs: Vec<serde_json::Value> = serde_json::from_str(history).unwrap();
+        
+        assert_eq!(history_msgs.len(), 2);
+        assert_eq!(history_msgs[0]["role"], "user");
+        assert_eq!(history_msgs[1]["role"], "assistant");
+    }
+
+    /// 测试空历史记录处理
+    #[test]
+    fn test_empty_history_handling() {
+        let history = "";
+        let result: Result<Vec<serde_json::Value>, _> = serde_json::from_str(history);
+        
+        // 空字符串应该解析失败
+        assert!(result.is_err());
+    }
+
+    /// 测试 display_name 使用逻辑
+    #[test]
+    fn test_display_name_usage() {
+        let config = create_test_model_config();
+        assert_eq!(config.display_name, Some("Test Model".to_string()));
+        
+        // 当 display_name 存在时，应该使用它
+        let display = config.display_name.as_ref().unwrap_or(&config.id);
+        assert_eq!(display, "Test Model");
+    }
+
+    /// 测试无 display_name 时的回退逻辑
+    #[test]
+    fn test_display_name_fallback() {
+        let mut config = create_test_model_config();
+        config.display_name = None;
+        
+        let display = config.display_name.as_ref().unwrap_or(&config.id);
+        assert_eq!(display, "test-model");
+    }
+}

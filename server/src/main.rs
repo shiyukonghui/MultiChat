@@ -1,11 +1,11 @@
 // 多模型聊天后端服务入口
 // 功能：加载配置、初始化日志、启动 HTTP 服务
 
-mod config;
-mod gateway;
-mod history;
-mod models;
-mod routes;
+pub mod config;
+pub mod gateway;
+pub mod history;
+pub mod models;
+pub mod routes;
 
 use std::sync::Arc;
 use tokio::sync::RwLock;

@@ -3,6 +3,10 @@ name = "multichat-server"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "multichat_server"
+path = "src/main.rs"
+
 [dependencies]
 axum = { version = "0.7", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
@@ -17,3 +21,10 @@ futures = "0.3"
 tokio-stream = "0.1"
 async-stream = "0.3"
 reqwest = { version = "0.12", features = ["json"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+tower = { version = "0.4", features = ["util"] }
+http-body-util = "0.1"
+tempfile = "3"
+urlencoding = "2"

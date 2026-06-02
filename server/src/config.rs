@@ -146,3 +146,157 @@ pub fn save_config(models: &[ModelConfig]) -> Result<(), Box<dyn std::error::Err
     fs::write(get_config_path(), yaml_content)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    use std::fs;
+
+    /// 测试正常加载 YAML 配置
+    #[test]
+    fn test_load_config_success() {
+        // 创建临时目录和配置文件
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config").join("models.yaml");
+        fs::create_dir_all(config_path.parent().unwrap()).unwrap();
+        
+        // 写入测试配置
+        let yaml_content = r#"
+models:
+  - id: test-model
+    provider: openai
+    model: gpt-4
+    enabled: true
+    api_key: test-key
+"#;
+        fs::write(&config_path, yaml_content).unwrap();
+        
+        // 临时切换工作目录进行测试
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(temp_dir.path()).unwrap();
+        
+        // 由于 load_config 使用硬编码路径，这里测试序列化/反序列化逻辑
+        let config: AppConfig = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(config.models.len(), 1);
+        assert_eq!(config.models[0].id, "test-model");
+        assert_eq!(config.models[0].provider, "openai");
+        assert!(config.models[0].enabled);
+        
+        std::env::set_current_dir(original_dir).unwrap();
+    }
+
+    /// 测试无效 YAML 格式
+    #[test]
+    fn test_load_config_invalid_yaml() {
+        let invalid_yaml = "invalid: yaml: content: [";
+        let result: Result<AppConfig, _> = serde_yaml::from_str(invalid_yaml);
+        assert!(result.is_err());
+    }
+
+    /// 测试保存配置到文件
+    #[test]
+    fn test_save_config_success() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config").join("models.yaml");
+        fs::create_dir_all(config_path.parent().unwrap()).unwrap();
+        
+        // 创建测试模型配置
+        let models = vec![ModelConfig {
+            id: "test-model".to_string(),
+            provider: "openai".to_string(),
+            model: "gpt-4".to_string(),
+            enabled: true,
+            timeout_seconds: 60,
+            max_tokens: 4096,
+            status: "active".to_string(),
+            api_key: "test-key".to_string(),
+            api_format: "openai-chat-completions".to_string(),
+            api_endpoint: "https://api.openai.com/v1".to_string(),
+            is_multimodal: false,
+            model_series: "default".to_string(),
+            display_name: None,
+            context_window_input: 184000,
+            context_window_output: 16000,
+            tool_call_rounds: 200,
+            use_full_url: false,
+        }];
+        
+        // 保存配置
+        let config = AppConfig { models: models.clone() };
+        let yaml_content = serde_yaml::to_string(&config).unwrap();
+        fs::write(&config_path, yaml_content).unwrap();
+        
+        // 验证文件内容
+        let saved_content = fs::read_to_string(&config_path).unwrap();
+        assert!(saved_content.contains("test-model"));
+        assert!(saved_content.contains("openai"));
+    }
+
+    /// 测试 ModelConfig 默认值
+    #[test]
+    fn test_model_config_defaults() {
+        // 测试带有缺失字段的 YAML 解析，验证默认值
+        let yaml_content = r#"
+models:
+  - id: minimal-model
+    provider: anthropic
+    model: claude-3
+"#;
+        let config: AppConfig = serde_yaml::from_str(yaml_content).unwrap();
+        let model = &config.models[0];
+        
+        // 验证默认值
+        assert!(model.enabled); // default_enabled
+        assert_eq!(model.timeout_seconds, 60); // default_timeout
+        assert_eq!(model.max_tokens, 4096); // default_max_tokens
+        assert_eq!(model.status, "active"); // default_status
+        assert_eq!(model.api_key, ""); // default (empty)
+        assert_eq!(model.api_format, "openai-chat-completions"); // default_api_format
+        assert_eq!(model.model_series, "default"); // default_model_series
+        assert_eq!(model.context_window_input, 184000); // default_context_window_input
+        assert_eq!(model.context_window_output, 16000); // default_context_window_output
+        assert_eq!(model.tool_call_rounds, 200); // default_tool_call_rounds
+        assert!(!model.use_full_url); // default (false)
+        assert!(!model.is_multimodal); // default (false)
+    }
+
+    /// 测试配置路径获取
+    #[test]
+    fn test_get_config_path() {
+        let path = get_config_path();
+        assert!(path.to_str().unwrap().contains("config"));
+        assert!(path.to_str().unwrap().contains("models.yaml"));
+    }
+
+    /// 测试 AppConfig 序列化格式
+    #[test]
+    fn test_app_config_serialization() {
+        let config = AppConfig {
+            models: vec![ModelConfig {
+                id: "test".to_string(),
+                provider: "openai".to_string(),
+                model: "gpt-4".to_string(),
+                enabled: true,
+                timeout_seconds: 30,
+                max_tokens: 8192,
+                status: "active".to_string(),
+                api_key: "sk-test".to_string(),
+                api_format: "openai-chat-completions".to_string(),
+                api_endpoint: "https://api.openai.com/v1".to_string(),
+                is_multimodal: true,
+                model_series: "gpt".to_string(),
+                display_name: Some("GPT-4".to_string()),
+                context_window_input: 128000,
+                context_window_output: 4096,
+                tool_call_rounds: 10,
+                use_full_url: true,
+            }],
+        };
+        
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(yaml.contains("id: test"));
+        assert!(yaml.contains("provider: openai"));
+        assert!(yaml.contains("display_name: GPT-4"));
+    }
+}

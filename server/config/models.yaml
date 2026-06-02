@@ -1,17 +1,33 @@
 models:
-- id: deepseek-v4-flash
-  provider: custom
-  model: deepseek-v4-flash
-  enabled: true
+- id: gpt-4
+  provider: openai
+  model: gpt-4
+  enabled: false
   timeout_seconds: 60
   max_tokens: 4096
   status: active
-  api_key: sk-QThJ5fCcU19FjqY22QRCAdWjQec46jgRD8MVemyBLI85NuRH
+  api_key: ''
   api_format: openai-chat-completions
-  api_endpoint: https://api.weelinking.com/v1
+  api_endpoint: ''
   is_multimodal: false
   model_series: default
-  context_window_input: 1000000
+  context_window_input: 184000
+  context_window_output: 16000
+  tool_call_rounds: 200
+  use_full_url: false
+- id: claude-3
+  provider: anthropic
+  model: claude-3
+  enabled: false
+  timeout_seconds: 60
+  max_tokens: 4096
+  status: active
+  api_key: ''
+  api_format: openai-chat-completions
+  api_endpoint: ''
+  is_multimodal: false
+  model_series: default
+  context_window_input: 184000
   context_window_output: 16000
   tool_call_rounds: 200
   use_full_url: false
