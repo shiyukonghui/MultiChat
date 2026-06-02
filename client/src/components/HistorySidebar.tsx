@@ -99,6 +99,9 @@ export default function HistorySidebar({
                           模型: {history.selectedModel}
                         </Typography>
                       )}
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        {history.messageCount} 条消息
+                      </Typography>
                     </Box>
                   }
                 />

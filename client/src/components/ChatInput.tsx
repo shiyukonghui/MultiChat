@@ -55,6 +55,11 @@ export default function ChatInput({ onSend, isLoading }: ChatInputProps) {
           onKeyDown={handleKeyDown}
           disabled={isLoading}
           error={isOverLimit}
+          slotProps={{
+            htmlInput: {
+              'aria-label': '消息输入框',
+            },
+          }}
           sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: 2,
@@ -66,6 +71,7 @@ export default function ChatInput({ onSend, isLoading }: ChatInputProps) {
           color="primary"
           onClick={handleSend}
           disabled={isSendDisabled}
+          aria-label="发送消息"
           sx={{
             mb: 0.5,
             bgcolor: 'primary.main',

@@ -177,6 +177,15 @@ export default function StreamingResponse({ modelStatus }: StreamingResponseProp
         },
       }}
     >
+      {/* 流式输出时显示加载指示器 */}
+      {modelStatus.status === 'streaming' && (
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <CircularProgress size={16} sx={{ mr: 1 }} />
+          <Typography variant="caption" color="text.secondary">
+            正在生成...
+          </Typography>
+        </Box>
+      )}
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
