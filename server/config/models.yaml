@@ -2,7 +2,7 @@ models:
 - id: gpt-4
   provider: openai
   model: gpt-4
-  enabled: false
+  enabled: true
   timeout_seconds: 60
   max_tokens: 4096
   status: active
@@ -18,7 +18,7 @@ models:
 - id: claude-3
   provider: anthropic
   model: claude-3
-  enabled: false
+  enabled: true
   timeout_seconds: 60
   max_tokens: 4096
   status: active
@@ -31,3 +31,4 @@ models:
   context_window_output: 16000
   tool_call_rounds: 200
   use_full_url: false
+e

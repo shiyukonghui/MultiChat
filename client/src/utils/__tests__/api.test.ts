@@ -12,8 +12,12 @@ import {
   deleteHistory,
   fetchHistoryDetail,
   updateModelDetail,
+  fetchPrompts,
+  createPrompt,
+  updatePrompt,
+  deletePrompt,
 } from '../api'
-import type { ModelConfig, HistoryRecord, HistoryRecordSummary } from '../../types'
+import type { ModelConfig, HistoryRecord, HistoryRecordSummary, Prompt } from '../../types'
 
 // 模拟模型配置数据
 const mockModels: ModelConfig[] = [
@@ -274,8 +278,8 @@ describe('API 模块测试', () => {
         name: '新对话',
         selectedModel: 'gpt-4',
         messages: [
-          { role: 'user', content: '测试' },
-          { role: 'assistant', content: '回复', model: 'gpt-4' },
+          { role: 'user' as const, content: '测试' },
+          { role: 'assistant' as const, content: '回复', model: 'gpt-4' },
         ],
       }
       const history = await saveHistory(historyData)
@@ -483,5 +487,166 @@ describe('API 模块测试', () => {
       expect(history).toHaveProperty('messages')
       expect(Array.isArray(history.messages)).toBe(true)
     })
+  })
+})
+
+// 模拟提示词数据
+const mockPrompts: Prompt[] = [
+  {
+    id: 'prompt-1',
+    title: '代码助手',
+    content: '你是一个专业的代码助手。',
+    createdAt: '2025-06-01T00:00:00Z',
+    updatedAt: '2025-06-01T00:00:00Z',
+  },
+  {
+    id: 'prompt-2',
+    title: '翻译助手',
+    content: '请将以下内容翻译成英文。',
+    createdAt: '2025-06-02T00:00:00Z',
+    updatedAt: '2025-06-02T00:00:00Z',
+  },
+]
+
+describe('prompts API', () => {
+  /// 测试获取所有提示词列表
+  it('fetchPrompts 正常返回提示词数组', async () => {
+    server.use(
+      http.get('/api/prompts', () => {
+        return HttpResponse.json(mockPrompts)
+      })
+    )
+    const prompts = await fetchPrompts()
+    expect(prompts).toBeInstanceOf(Array)
+    expect(prompts.length).toBe(2)
+    expect(prompts[0]).toHaveProperty('id')
+    expect(prompts[0]).toHaveProperty('title')
+    expect(prompts[0]).toHaveProperty('content')
+    expect(prompts[0]).toHaveProperty('createdAt')
+    expect(prompts[0]).toHaveProperty('updatedAt')
+  })
+
+  /// 测试 fetchPrompts 网络错误
+  it('fetchPrompts 网络错误时抛出异常', async () => {
+    server.use(
+      http.get('/api/prompts', () => {
+        return new HttpResponse(null, { status: 500 })
+      })
+    )
+    await expect(fetchPrompts()).rejects.toThrow()
+  })
+
+  /// 测试创建提示词
+  it('createPrompt 成功创建新提示词', async () => {
+    server.use(
+      http.post('/api/prompts', async ({ request }) => {
+        const body = await request.json() as { title: string; content: string }
+        const newPrompt: Prompt = {
+          id: `prompt-${Date.now()}`,
+          title: body.title,
+          content: body.content,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+        return HttpResponse.json(newPrompt)
+      })
+    )
+    const prompt = await createPrompt({ title: '新提示词', content: '这是新提示词的内容。' })
+    expect(prompt).toHaveProperty('id')
+    expect(prompt).toHaveProperty('title', '新提示词')
+    expect(prompt).toHaveProperty('content', '这是新提示词的内容。')
+    expect(prompt).toHaveProperty('createdAt')
+    expect(prompt).toHaveProperty('updatedAt')
+    expect(typeof prompt.id).toBe('string')
+  })
+
+  /// 测试 createPrompt 验证失败时抛出错误
+  it('createPrompt 验证失败时抛出错误', async () => {
+    server.use(
+      http.post('/api/prompts', () => {
+        return new HttpResponse(null, { status: 400 })
+      })
+    )
+    await expect(createPrompt({ title: '', content: '' })).rejects.toThrow()
+  })
+
+  /// 测试更新提示词
+  it('updatePrompt 成功更新提示词标题', async () => {
+    server.use(
+      http.put('/api/prompts/prompt-1', async ({ request }) => {
+        const body = await request.json() as { title?: string; content?: string }
+        const updated: Prompt = {
+          ...mockPrompts[0],
+          ...body,
+          updatedAt: new Date().toISOString(),
+        }
+        return HttpResponse.json(updated)
+      })
+    )
+    const prompt = await updatePrompt('prompt-1', { title: '更新后的标题' })
+    expect(prompt).toHaveProperty('id', 'prompt-1')
+    expect(prompt.title).toBe('更新后的标题')
+    expect(prompt.content).toBe('你是一个专业的代码助手。')
+  })
+
+  /// 测试 updatePrompt 部分更新内容
+  it('updatePrompt 成功更新提示词内容', async () => {
+    server.use(
+      http.put('/api/prompts/prompt-2', async ({ request }) => {
+        const body = await request.json() as { title?: string; content?: string }
+        const updated: Prompt = {
+          ...mockPrompts[1],
+          ...body,
+          updatedAt: new Date().toISOString(),
+        }
+        return HttpResponse.json(updated)
+      })
+    )
+    const prompt = await updatePrompt('prompt-2', { content: '新的翻译内容。' })
+    expect(prompt).toHaveProperty('id', 'prompt-2')
+    expect(prompt.title).toBe('翻译助手')
+    expect(prompt.content).toBe('新的翻译内容。')
+  })
+
+  /// 测试 deletePrompt 成功删除
+  it('deletePrompt 成功删除提示词', async () => {
+    server.use(
+      http.delete('/api/prompts/prompt-1', () => {
+        return new HttpResponse(null, { status: 204 })
+      })
+    )
+    await expect(deletePrompt('prompt-1')).resolves.toBeUndefined()
+  })
+
+  /// 测试 deletePrompt 不存在的提示词返回错误
+  it('deletePrompt 不存在的提示词时抛出错误', async () => {
+    server.use(
+      http.delete('/api/prompts/non-existent', () => {
+        return new HttpResponse(null, { status: 404 })
+      })
+    )
+    await expect(deletePrompt('non-existent')).rejects.toThrow()
+  })
+
+  /// 测试 fetchPrompts 返回空数组
+  it('fetchPrompts 返回空数组', async () => {
+    server.use(
+      http.get('/api/prompts', () => {
+        return HttpResponse.json([])
+      })
+    )
+    const prompts = await fetchPrompts()
+    expect(prompts).toBeInstanceOf(Array)
+    expect(prompts.length).toBe(0)
+  })
+
+  /// 测试 updatePrompt 提示词不存在时抛出错误
+  it('updatePrompt 提示词不存在时抛出错误', async () => {
+    server.use(
+      http.put('/api/prompts/non-existent', () => {
+        return new HttpResponse(null, { status: 404 })
+      })
+    )
+    await expect(updatePrompt('non-existent', { title: '新标题' })).rejects.toThrow()
   })
 })

@@ -5,6 +5,7 @@ pub mod config;
 pub mod gateway;
 pub mod history;
 pub mod models;
+pub mod prompt_storage;
 pub mod routes;
 
 use std::sync::Arc;
@@ -100,10 +101,26 @@ async fn main() {
     // 获取历史记录数量（在 state 被 move 之前）
     let history_count = histories.len();
 
-    // ========== 4. 创建全局共享状态 ==========
+    // ========== 4. 加载提示词列表 ==========
+    let prompts = match prompt_storage::load_prompts() {
+        Ok(p) => {
+            tracing::info!("已加载提示词: {} 条", p.len());
+            p
+        }
+        Err(e) => {
+            tracing::warn!("加载提示词失败: {}，将使用空列表", e);
+            Vec::new()
+        }
+    };
+
+    // 获取提示词数量（在 state 被 move 之前）
+    let prompt_count = prompts.len();
+
+    // ========== 5. 创建全局共享状态 ==========
     let state = AppState {
         models: Arc::new(RwLock::new(app_config.models)),
         histories: Arc::new(RwLock::new(histories)),
+        prompts: Arc::new(RwLock::new(prompts)),
     };
 
     // ========== 5. 配置 CORS（开发阶段允许所有来源） ==========
@@ -135,6 +152,10 @@ async fn main() {
     tracing::info!(
         "已加载历史记录: {} 条",
         history_count
+    );
+    tracing::info!(
+        "已加载提示词: {} 条",
+        prompt_count
     );
     tracing::info!(
         "服务提供商: {:?}",

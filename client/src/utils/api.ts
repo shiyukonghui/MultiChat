@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ModelConfig, HistoryRecord, HistoryRecordSummary } from '../types';
+import type { ModelConfig, HistoryRecord, HistoryRecordSummary, Prompt } from '../types';
 
 // 创建 axios 实例，统一配置基础路径和超时
 const api = axios.create({
@@ -65,4 +65,27 @@ export async function deleteHistory(id: string): Promise<void> {
 export async function fetchHistoryDetail(id: string): Promise<HistoryRecord> {
   const response = await api.get<HistoryRecord>(`/histories/${id}`);
   return response.data;
+}
+
+// 获取所有提示词列表
+export async function fetchPrompts(): Promise<Prompt[]> {
+  const response = await api.get<Prompt[]>('/prompts');
+  return response.data;
+}
+
+// 创建提示词
+export async function createPrompt(data: { title: string; content: string }): Promise<Prompt> {
+  const response = await api.post<Prompt>('/prompts', data);
+  return response.data;
+}
+
+// 更新提示词
+export async function updatePrompt(id: string, data: { title?: string; content?: string }): Promise<Prompt> {
+  const response = await api.put<Prompt>(`/prompts/${id}`, data);
+  return response.data;
+}
+
+// 删除提示词
+export async function deletePrompt(id: string): Promise<void> {
+  await api.delete(`/prompts/${id}`);
 }

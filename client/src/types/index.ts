@@ -81,9 +81,18 @@ export interface ModelStatus {
 
 // 对话消息
 export interface ChatMessage {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   model?: string;
+}
+
+// 提示词（System Prompt）
+export interface Prompt {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;  // ISO 8601
+  updatedAt: string;  // ISO 8601
 }
 
 // 对话全局状态

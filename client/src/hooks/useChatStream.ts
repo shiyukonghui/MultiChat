@@ -6,7 +6,7 @@ import type { ChatMessage, ChatState, SSEChunkData, SSEDoneData, SSEErrorData } 
 // useChatStream 返回类型
 interface UseChatStreamReturn {
   state: ChatState;
-  sendMessage: (message: string) => void;
+  sendMessage: (message: string, activePromptContent?: string) => void;
   selectModel: (model: string) => void;
   resetSession: () => void;
   refreshModels: () => Promise<void>;
@@ -61,7 +61,7 @@ export function useChatStream(): UseChatStreamReturn {
 
   // 发送消息：建立 SSE 连接并监听流式事件
   const sendMessage = useCallback(
-    (message: string) => {
+    (message: string, activePromptContent?: string) => {
       // 关闭之前可能存在的连接
       closeConnection();
 
@@ -85,8 +85,18 @@ export function useChatStream(): UseChatStreamReturn {
 
       // 序列化对话历史（包含刚添加的用户消息）
       const messages = [...state.messages, userMsg];
+
+      // 如果有激活的系统提示词，注入到 messages 头部
+      let historyMessages = messages;
+      if (activePromptContent) {
+        historyMessages = [
+          { role: 'system' as const, content: activePromptContent },
+          ...messages,
+        ];
+      }
+
       const history = JSON.stringify(
-        messages.map((m) => ({
+        historyMessages.map((m) => ({
           role: m.role,
           content: m.content,
           ...(m.model ? { model: m.model } : {}),

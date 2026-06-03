@@ -12,6 +12,7 @@ pub fn create_empty_state() -> AppState {
     AppState {
         models: Arc::new(RwLock::new(Vec::new())),
         histories: Arc::new(RwLock::new(Vec::new())),
+        prompts: Arc::new(RwLock::new(Vec::new())),
     }
 }
 
@@ -20,6 +21,7 @@ pub fn create_state_with_models(models: Vec<ModelConfig>) -> AppState {
     AppState {
         models: Arc::new(RwLock::new(models)),
         histories: Arc::new(RwLock::new(Vec::new())),
+        prompts: Arc::new(RwLock::new(Vec::new())),
     }
 }
 
@@ -28,6 +30,7 @@ pub fn create_state_with_histories(histories: Vec<HistoryRecord>) -> AppState {
     AppState {
         models: Arc::new(RwLock::new(Vec::new())),
         histories: Arc::new(RwLock::new(histories)),
+        prompts: Arc::new(RwLock::new(Vec::new())),
     }
 }
 
@@ -36,6 +39,7 @@ pub fn create_full_state(models: Vec<ModelConfig>, histories: Vec<HistoryRecord>
     AppState {
         models: Arc::new(RwLock::new(models)),
         histories: Arc::new(RwLock::new(histories)),
+        prompts: Arc::new(RwLock::new(Vec::new())),
     }
 }
 

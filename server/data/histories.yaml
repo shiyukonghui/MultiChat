@@ -1,15 +1,15 @@
 histories:
-- id: 14d8788c-94b7-4c91-bc1f-9f886ad6c1bd
-  name: New Chat
-  timestamp: 1780360038
+- id: history-1
+  name: Updated Chat Name
+  timestamp: 1780454787
   selected_model: null
   messages: []
- Hello
-    model: null
-  - role: assistant
-    content: Hi there!
-    model: null
-ole: user
+- id: history-2
+  name: Second Chat
+  timestamp: 1700000000
+  selected_model: null
+  messages:
+  - role: user
     content: Hello
     model: null
   - role: assistant

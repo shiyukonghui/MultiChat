@@ -21,6 +21,7 @@ import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
 import SettingsIcon from '@mui/icons-material/Settings';
 import HistoryIcon from '@mui/icons-material/History';
 import SaveIcon from '@mui/icons-material/Save';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 
 import { useChatStream } from './hooks/useChatStream';
 import ChatInput from './components/ChatInput';
@@ -29,8 +30,9 @@ import StreamingResponse from './components/StreamingResponse';
 import ModelConfigPanel from './pages/ModelConfigPanel';
 import HistorySidebar from './components/HistorySidebar';
 import SaveHistoryDialog from './components/SaveHistoryDialog';
-import { fetchHistories, fetchHistoryDetail, saveHistory, deleteHistory } from './utils/api';
-import type { ChatMessage, HistoryRecordSummary } from './types';
+import PromptDialog from './components/PromptDialog';
+import { fetchHistories, fetchHistoryDetail, saveHistory, deleteHistory, fetchPrompts } from './utils/api';
+import type { ChatMessage, HistoryRecordSummary, Prompt } from './types';
 
 // 侧边栏宽度常量
 const DRAWER_WIDTH = 280;
@@ -163,6 +165,15 @@ function App() {
   // 加载历史记录详情时的状态
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
+  // 提示词管理对话框状态
+  const [promptDialogOpen, setPromptDialogOpen] = useState(false);
+  // 提示词列表
+  const [prompts, setPrompts] = useState<Prompt[]>([]);
+  // 当前激活的提示词ID（持久化到 localStorage）
+  const [activePromptId, setActivePromptId] = useState<string | null>(() => {
+    return localStorage.getItem('activePromptId');
+  });
+
   // 当前选中的模型状态
   const selectedModelStatus = state.selectedModel
     ? state.modelStatuses[state.selectedModel]
@@ -174,12 +185,41 @@ function App() {
     modelIds.length > 0 &&
     modelIds.every((id) => state.modelStatuses[id]?.status === 'error');
 
+  // 加载提示词列表
+  const loadPrompts = useCallback(async () => {
+    try {
+      const data = await fetchPrompts();
+      setPrompts(data);
+      // 如果激活的提示词已被删除，自动取消激活
+      if (activePromptId && !data.find(p => p.id === activePromptId)) {
+        setActivePromptId(null);
+        localStorage.removeItem('activePromptId');
+      }
+    } catch (error) {
+      console.error('加载提示词失败:', error);
+    }
+  }, [activePromptId]);
+
+  // 激活/取消激活提示词
+  const handleActivatePrompt = useCallback((id: string | null) => {
+    setActivePromptId(id);
+    if (id) {
+      localStorage.setItem('activePromptId', id);
+    } else {
+      localStorage.removeItem('activePromptId');
+    }
+  }, []);
+
   // 发送消息回调
   const handleSend = useCallback(
     (message: string) => {
-      sendMessage(message);
+      // 查找激活的提示词内容
+      const activePrompt = activePromptId
+        ? prompts.find(p => p.id === activePromptId)
+        : undefined;
+      sendMessage(message, activePrompt?.content);
     },
-    [sendMessage]
+    [sendMessage, activePromptId, prompts]
   );
 
   // 新建会话
@@ -347,6 +387,20 @@ function App() {
                     </IconButton>
                   </span>
                 </Tooltip>
+                <Tooltip title="系统提示词">
+                  <span>
+                    <IconButton
+                      color="inherit"
+                      onClick={() => {
+                        loadPrompts();
+                        setPromptDialogOpen(true);
+                      }}
+                      size="small"
+                    >
+                      <SmartToyIcon />
+                    </IconButton>
+                  </span>
+                </Tooltip>
                 <Tooltip title="模型配置">
                   <span>
                     <IconButton
@@ -488,6 +542,15 @@ function App() {
             <Button onClick={() => setConfigOpen(false)}>关闭</Button>
           </DialogActions>
         </Dialog>
+
+        {/* ========== 提示词管理对话框 ========== */}
+        <PromptDialog
+          open={promptDialogOpen}
+          onClose={() => setPromptDialogOpen(false)}
+          activePromptId={activePromptId}
+          onActivate={handleActivatePrompt}
+          onPromptsChange={loadPrompts}
+        />
 
         {/* ========== 清空会话确认对话框 ========== */}
         <Dialog open={clearDialogOpen} onClose={() => setClearDialogOpen(false)}>

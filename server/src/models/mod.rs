@@ -1,8 +1,11 @@
 // 数据模型模块
 // 定义 API 请求/响应结构体以及应用共享状态
 
+pub mod prompt;
+
 use crate::config::ModelConfig;
 use crate::history::HistoryRecord;
+use crate::models::prompt::Prompt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -144,6 +147,8 @@ pub struct AppState {
     pub models: Arc<RwLock<Vec<ModelConfig>>>,
     /// 历史记录列表，支持并发读写
     pub histories: Arc<RwLock<Vec<HistoryRecord>>>,
+    /// 提示词列表，支持并发读写
+    pub prompts: Arc<RwLock<Vec<Prompt>>>,
 }
 
 /// 对话消息（用于携带对话历史）
@@ -377,6 +382,7 @@ mod tests {
         let state = AppState {
             models: Arc::new(RwLock::new(Vec::new())),
             histories: Arc::new(RwLock::new(Vec::new())),
+            prompts: Arc::new(RwLock::new(Vec::new())),
         };
         
         // 测试 Clone trait 实现
@@ -384,6 +390,7 @@ mod tests {
         // 测试 Arc 可以被克隆
         let _models_clone = state.models.clone();
         let _histories_clone = state.histories.clone();
+        let _prompts_clone = state.prompts.clone();
     }
 
     /// 测试 ModelConfigResponse skip_serializing_if
