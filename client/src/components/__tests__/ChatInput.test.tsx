@@ -124,7 +124,7 @@ describe('ChatInput 组件测试', () => {
     const onSend = vi.fn()
     render(<ChatInput onSend={onSend} isLoading={false} />)
     
-    const input = screen.getByRole('textbox')
+    screen.getByRole('textbox')
     const longText = 'a'.repeat(4001)
     await user.paste(longText)
     

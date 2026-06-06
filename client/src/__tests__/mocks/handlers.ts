@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import type { ModelConfig, HistoryRecord, HistoryRecordSummary } from '../types'
+import type { ModelConfig, HistoryRecord, HistoryRecordSummary } from '../../types'
 
 // 模拟模型配置数据
 const mockModels: ModelConfig[] = [

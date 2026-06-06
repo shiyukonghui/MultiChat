@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { vi } from 'vitest'
+import { vi, beforeEach } from 'vitest'
 
 // Mock localStorage - 使用真实的 localStorage 实现，但可以 spy
 const localStorageStore: Record<string, string> = {}

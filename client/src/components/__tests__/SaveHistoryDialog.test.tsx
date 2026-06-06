@@ -369,7 +369,6 @@ describe('SaveHistoryDialog 组件测试', () => {
       )
 
       const input = screen.getByRole('textbox')
-      const firstName = input.getAttribute('value')
       await user.clear(input)
       await user.type(input, '修改后的名称')
 

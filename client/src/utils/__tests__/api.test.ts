@@ -328,7 +328,7 @@ describe('API 模块测试', () => {
     it('成功调用 updateModelDetail', async () => {
       server.use(
         http.put('/api/models/test-model', async ({ request }) => {
-          const body = await request.json()
+          const body = await request.json() as Record<string, unknown>
           return HttpResponse.json({ ...body, id: 'test-model', status: 'available' })
         })
       )
