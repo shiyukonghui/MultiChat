@@ -1,5 +1,5 @@
 import { useReducer, useRef, useCallback } from 'react';
-import { chatReducer, initialChatState, loadHistoryFromStorage } from '../utils/chatReducer';
+import { chatReducer, initialChatState } from '../utils/chatReducer';
 import { createChatStreamUrl, fetchModels } from '../utils/api';
 import type { ChatMessage, ChatState, SSEChunkData, SSEDoneData, SSEErrorData } from '../types';
 
@@ -16,20 +16,9 @@ interface UseChatStreamReturn {
 // SSE 流式对话管理 Hook
 // 封装 EventSource 连接、多模型状态管理和断线重连逻辑
 export function useChatStream(): UseChatStreamReturn {
-  // 安全地加载历史记录，确保始终返回数组
-  const loadMessages = (): ChatMessage[] => {
-    const history = loadHistoryFromStorage();
-    // 双重保险：确保返回的是数组
-    if (!Array.isArray(history)) {
-      console.warn('loadHistoryFromStorage 返回了非数组值，使用空数组');
-      return [];
-    }
-    return history;
-  };
-
   const [state, dispatch] = useReducer(chatReducer, {
     ...initialChatState,
-    messages: loadMessages(), // 从 localStorage 恢复历史对话
+    messages: [], // 初始为空，不再从 localStorage 恢复历史对话
   });
 
   const eventSourceRef = useRef<EventSource | null>(null);

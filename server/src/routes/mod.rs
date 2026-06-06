@@ -7,7 +7,7 @@ pub mod models;
 pub mod prompts;
 
 use axum::{
-    routing::{get, put},
+    routing::{get, post, put},
     Router,
 };
 use crate::models::AppState;
@@ -29,6 +29,7 @@ pub fn create_router() -> Router<AppState> {
         .route("/api/models", get(models::get_models).post(models::create_model))
         .route("/api/models/:id", put(models::update_model).delete(models::delete_model))
         .route("/api/histories", get(history::get_histories).post(history::create_history))
+        .route("/api/histories/upsert", post(history::upsert_history))
         .route("/api/histories/:id", get(history::get_history_detail).put(history::update_history).delete(history::delete_history))
         .route("/api/prompts", get(prompts::get_prompts).post(prompts::create_prompt))
         .route("/api/prompts/:id", get(prompts::get_prompt_detail).put(prompts::update_prompt).delete(prompts::delete_prompt))

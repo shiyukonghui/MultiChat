@@ -10,66 +10,6 @@ export const initialChatState: ChatState = {
   error: null,
 };
 
-// localStorage 存储键和保留轮数
-const STORAGE_KEY = 'multichat_history';
-const MAX_ROUNDS = 10;
-
-// 从 localStorage 恢复对话历史
-// 保留最近 N 轮（每轮包含 user + assistant 两条消息）
-export function loadHistoryFromStorage(): ChatMessage[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    // 验证存储的数据是否存在且为非空字符串
-    if (!stored || typeof stored !== 'string' || stored.trim() === '') {
-      return [];
-    }
-
-    const parsed = JSON.parse(stored);
-
-    // 验证解析后的结果是否为数组
-    if (!Array.isArray(parsed)) {
-      console.warn('localStorage 中的对话历史不是数组格式，已重置');
-      localStorage.removeItem(STORAGE_KEY);
-      return [];
-    }
-
-    // 验证数组中的每个元素是否符合 ChatMessage 结构
-    const validMessages = parsed.filter((item): item is ChatMessage => {
-      return (
-        item &&
-        typeof item === 'object' &&
-        (item.role === 'user' || item.role === 'assistant') &&
-        typeof item.content === 'string'
-      );
-    });
-
-    // 如果有无效数据，记录警告
-    if (validMessages.length !== parsed.length) {
-      console.warn(`过滤掉了 ${parsed.length - validMessages.length} 条无效消息记录`);
-    }
-
-    // 只保留最近 N 轮对话
-    return validMessages.slice(-MAX_ROUNDS * 2);
-  } catch (e) {
-    console.error('恢复对话历史失败:', e);
-    // 如果解析失败，清除损坏的数据
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // 忽略清除失败的情况
-    }
-    return [];
-  }
-}
-
-// 保存对话历史到 localStorage
-export function saveHistoryToStorage(messages: ChatMessage[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-  } catch (e) {
-    console.error('保存对话历史失败:', e);
-  }
-}
 
 // 对话状态 Reducer
 // 管理消息列表、多模型流式状态、选中模型和加载/错误状态
@@ -78,7 +18,6 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     // 发送新消息：将用户消息追加到历史，进入加载状态
     case 'SEND_MESSAGE': {
       const newMessages = [...state.messages, action.payload];
-      saveHistoryToStorage(newMessages);
       return {
         ...state,
         messages: newMessages,
@@ -137,7 +76,6 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         model,
       };
       const newMessages = [...state.messages, assistantMsg];
-      saveHistoryToStorage(newMessages);
 
       return {
         ...state,
@@ -234,9 +172,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, modelStatuses: newStatuses };
     }
 
-    // 重置会话：清空所有状态并持久化空历史
+    // 重置会话：清空所有状态
     case 'RESET': {
-      saveHistoryToStorage([]);
       return { ...initialChatState };
     }
 
@@ -250,7 +187,6 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         console.warn('LOAD_HISTORY 接收到的 messages 不是数组，已使用空数组代替');
       }
 
-      saveHistoryToStorage(validMessages);
       return {
         ...state,
         messages: validMessages,

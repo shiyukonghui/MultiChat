@@ -2,8 +2,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
   chatReducer,
   initialChatState,
-  loadHistoryFromStorage,
-  saveHistoryToStorage,
 } from '../chatReducer'
 import type { ChatState, ChatAction, ChatMessage } from '../../types'
 
@@ -25,16 +23,6 @@ describe('chatReducer 测试', () => {
       expect(newState.messages[0]).toEqual(userMsg)
       expect(newState.isLoading).toBe(true)
       expect(newState.error).toBeNull()
-    })
-
-    it('保存消息到 localStorage', () => {
-      const userMsg: ChatMessage = { role: 'user', content: '测试' }
-      
-      chatReducer(state, { type: 'SEND_MESSAGE', payload: userMsg })
-      
-      const stored = localStorage.getItem('multichat_history')
-      expect(stored).toBeTruthy()
-      expect(JSON.parse(stored!)).toEqual([userMsg])
     })
   })
 
@@ -274,15 +262,6 @@ describe('chatReducer 测试', () => {
       expect(newState.selectedModel).toBeNull()
       expect(newState.isLoading).toBe(false)
     })
-
-    it('清空 localStorage', () => {
-      localStorage.setItem('multichat_history', JSON.stringify([{ role: 'user', content: 'test' }]))
-      
-      chatReducer(state, { type: 'RESET' })
-      
-      const stored = localStorage.getItem('multichat_history')
-      expect(stored).toBe('[]')
-    })
   })
 
   describe('LOAD_HISTORY action', () => {
@@ -315,96 +294,5 @@ describe('chatReducer 测试', () => {
       expect(newState.messages).toEqual([])
       expect(consoleSpy).toHaveBeenCalled()
     })
-  })
-})
-
-describe('loadHistoryFromStorage 测试', () => {
-  beforeEach(() => {
-    localStorage.clear()
-    vi.clearAllMocks()
-  })
-
-  it('正常数据时返回解析后的数组', () => {
-    const messages: ChatMessage[] = [
-      { role: 'user', content: '你好' },
-      { role: 'assistant', content: '你好！', model: 'gpt-4' },
-    ]
-    localStorage.setItem('multichat_history', JSON.stringify(messages))
-    
-    const result = loadHistoryFromStorage()
-    
-    expect(result).toEqual(messages)
-  })
-
-  it('无数据时返回空数组', () => {
-    const result = loadHistoryFromStorage()
-    
-    expect(result).toEqual([])
-  })
-
-  it('空字符串时返回空数组', () => {
-    localStorage.setItem('multichat_history', '')
-    
-    const result = loadHistoryFromStorage()
-    
-    expect(result).toEqual([])
-  })
-
-  it('损坏数据时返回空数组并清除数据', () => {
-    localStorage.setItem('multichat_history', 'invalid json')
-    
-    const result = loadHistoryFromStorage()
-    
-    expect(result).toEqual([])
-    expect(localStorage.getItem('multichat_history')).toBeNull()
-  })
-
-  it('过滤无效消息', () => {
-    const invalidMessages = [
-      { role: 'user', content: '有效' },
-      { role: 'invalid' },
-      { content: '缺少 role' },
-      null,
-      { role: 'assistant', content: '有效回复' },
-    ] as any[]
-    localStorage.setItem('multichat_history', JSON.stringify(invalidMessages))
-    
-    const result = loadHistoryFromStorage()
-    
-    expect(result).toHaveLength(2)
-    expect(result[0].content).toBe('有效')
-    expect(result[1].content).toBe('有效回复')
-  })
-
-  it('限制最多 10 轮对话', () => {
-    const messages: ChatMessage[] = []
-    for (let i = 0; i < 25; i++) {
-      messages.push({ role: 'user', content: `用户消息 ${i}` })
-      messages.push({ role: 'assistant', content: `助手回复 ${i}`, model: 'gpt-4' })
-    }
-    localStorage.setItem('multichat_history', JSON.stringify(messages))
-    
-    const result = loadHistoryFromStorage()
-    
-    expect(result.length).toBeLessThanOrEqual(20)
-  })
-})
-
-describe('saveHistoryToStorage 测试', () => {
-  beforeEach(() => {
-    localStorage.clear()
-  })
-
-  it('正常保存消息到 localStorage', () => {
-    const messages: ChatMessage[] = [
-      { role: 'user', content: '测试' },
-      { role: 'assistant', content: '回复', model: 'gpt-4' },
-    ]
-    
-    saveHistoryToStorage(messages)
-    
-    const stored = localStorage.getItem('multichat_history')
-    expect(stored).toBeTruthy()
-    expect(JSON.parse(stored!)).toEqual(messages)
   })
 })

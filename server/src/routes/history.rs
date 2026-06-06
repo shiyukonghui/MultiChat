@@ -178,6 +178,74 @@ pub async fn get_history_detail(
     }
 }
 
+/// 创建或更新历史记录的请求体（upsert 语义）
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertHistoryRequest {
+    /// 如果提供 ID 且存在则更新，否则创建新记录
+    pub id: Option<String>,
+    /// 对话名称/标题
+    pub name: String,
+    /// 当前选中的模型ID
+    pub selected_model: Option<String>,
+    /// 对话消息列表
+    pub messages: Vec<ChatMessage>,
+}
+
+/// POST /api/histories/upsert - 创建或更新历史记录（upsert 语义）
+///
+/// - 如果 body.id 为 Some(id) 且在 histories 中找到该记录，则更新它
+/// - 如果 body.id 为 None 或未找到对应记录，则创建新记录（生成 UUID）
+pub async fn upsert_history(
+    State(state): State<AppState>,
+    Json(body): Json<UpsertHistoryRequest>,
+) -> Json<HistoryRecord> {
+    let mut histories = state.histories.write().await;
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    // 尝试查找现有记录
+    if let Some(ref id) = body.id {
+        if let Some(index) = histories.iter().position(|h| h.id == *id) {
+            // 更新现有记录
+            histories[index].name = body.name;
+            histories[index].selected_model = body.selected_model;
+            histories[index].messages = body.messages;
+            histories[index].timestamp = timestamp;
+
+            let record = histories[index].clone();
+
+            // 持久化到 YAML 文件
+            if let Err(e) = history::save_histories(&histories) {
+                tracing::warn!("保存历史记录到文件失败: {}", e);
+            }
+
+            return Json(record);
+        }
+    }
+
+    // 创建新记录
+    let new_id = body.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let new_record = HistoryRecord {
+        id: new_id,
+        name: body.name,
+        timestamp,
+        selected_model: body.selected_model,
+        messages: body.messages,
+    };
+
+    histories.push(new_record.clone());
+
+    // 持久化到 YAML 文件
+    if let Err(e) = history::save_histories(&histories) {
+        tracing::warn!("保存历史记录到文件失败: {}", e);
+    }
+
+    Json(new_record)
+}
+
 /// PUT /api/histories/:id - 更新历史记录
 /// 
 /// 支持更新名称、选中模型和消息列表

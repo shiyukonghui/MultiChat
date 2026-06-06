@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, Component, type ErrorInfo, type ReactNode } from 'react';
+import { useState, useCallback, useEffect, useRef, Component, type ErrorInfo, type ReactNode } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Box from '@mui/material/Box';
@@ -31,7 +31,7 @@ import ModelConfigPanel from './pages/ModelConfigPanel';
 import HistorySidebar from './components/HistorySidebar';
 import SaveHistoryDialog from './components/SaveHistoryDialog';
 import PromptDialog from './components/PromptDialog';
-import { fetchHistories, fetchHistoryDetail, saveHistory, deleteHistory, fetchPrompts } from './utils/api';
+import { fetchHistories, fetchHistoryDetail, deleteHistory, fetchPrompts, upsertHistory } from './utils/api';
 import type { ChatMessage, HistoryRecordSummary, Prompt } from './types';
 
 // 侧边栏宽度常量
@@ -158,6 +158,18 @@ function App() {
   const [histories, setHistories] = useState<HistoryRecordSummary[]>([]);
   // 保存历史记录对话框状态
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+
+  // 自动保存相关状态
+  const [currentRecordId, setCurrentRecordId] = useState<string | null>(null);
+  const lastSavedCountRef = useRef(0);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 使用 ref 保存 currentRecordId 避免闭包问题
+  const currentRecordIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    currentRecordIdRef.current = currentRecordId;
+  }, [currentRecordId]);
+
   // 恢复历史记录确认对话框状态
   const [loadHistoryConfirmOpen, setLoadHistoryConfirmOpen] = useState(false);
   // 待恢复的历史记录（只存储摘要，详情需要异步获取）
@@ -225,6 +237,7 @@ function App() {
   // 新建会话
   const handleNewSession = useCallback(() => {
     resetSession();
+    setCurrentRecordId(null);
     setSnackbar({ open: true, message: '已创建新会话' });
   }, [resetSession]);
 
@@ -232,6 +245,7 @@ function App() {
   const handleClearSession = useCallback(() => {
     setClearDialogOpen(false);
     resetSession();
+    setCurrentRecordId(null);
     setSnackbar({ open: true, message: '会话已清空' });
   }, [resetSession]);
 
@@ -245,6 +259,42 @@ function App() {
     }
   }, []);
 
+  // 自动保存到后端（使用 upsert API）
+  const performAutoSave = useCallback(async () => {
+    if (state.messages.length === 0) return;
+
+    // 生成自动名称（第一条用户消息的前30字符）
+    const firstUserMsg = state.messages.find(m => m.role === 'user');
+    const name = firstUserMsg
+      ? (firstUserMsg.content.length > 30
+        ? firstUserMsg.content.substring(0, 30) + '...'
+        : firstUserMsg.content)
+      : '新对话';
+
+    try {
+      const result = await upsertHistory({
+        id: currentRecordIdRef.current || undefined,
+        name,
+        selectedModel: state.selectedModel,
+        messages: state.messages,
+      });
+
+      // 首次保存时记录返回的 ID
+      if (!currentRecordIdRef.current) {
+        setCurrentRecordId(result.id);
+      }
+      lastSavedCountRef.current = state.messages.length;
+    } catch (error) {
+      console.error('自动保存失败:', error);
+    }
+  }, [state.messages, state.selectedModel]);
+
+  // 页面加载时预加载历史记录列表
+  useEffect(() => {
+    loadHistories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 监听侧边栏打开时加载历史记录
   useEffect(() => {
     if (historySidebarOpen) {
@@ -252,20 +302,35 @@ function App() {
     }
   }, [historySidebarOpen, loadHistories]);
 
-  // 处理保存历史记录
-  const handleSaveHistory = useCallback(async (name: string) => {
+  // 监听消息变化触发自动保存（防抖 300ms）
+  useEffect(() => {
+    // 只在消息数量增加时触发（新的模型回复完成）
+    if (state.messages.length > lastSavedCountRef.current) {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+      autoSaveTimerRef.current = setTimeout(() => {
+        performAutoSave();
+      }, 300);
+    }
+  }, [state.messages, performAutoSave]);
+
+  // 处理重命名历史记录
+  const handleRenameHistory = useCallback(async (name: string) => {
+    if (!currentRecordId) return;
     try {
-      await saveHistory({
+      await upsertHistory({
+        id: currentRecordId,
         name,
         selectedModel: state.selectedModel,
         messages: state.messages,
       });
-      setSnackbar({ open: true, message: '已保存到历史记录' });
+      setSnackbar({ open: true, message: '已重命名' });
       loadHistories(); // 刷新列表
     } catch (error) {
-      setSnackbar({ open: true, message: '保存失败' });
+      setSnackbar({ open: true, message: '重命名失败' });
     }
-  }, [state.selectedModel, state.messages, loadHistories]);
+  }, [currentRecordId, state.selectedModel, state.messages, loadHistories]);
 
   // 处理选择历史记录
   const handleSelectHistory = useCallback(async (history: HistoryRecordSummary) => {
@@ -352,12 +417,12 @@ function App() {
                     </Button>
                   </span>
                 </Tooltip>
-                <Tooltip title="保存当前会话">
+                <Tooltip title="重命名当前对话">
                   <span>
                     <IconButton
                       color="inherit"
                       onClick={() => setSaveDialogOpen(true)}
-                      disabled={state.isLoading || state.messages.length === 0}
+                      disabled={state.isLoading || state.messages.length === 0 || !currentRecordId}
                       size="small"
                     >
                       <SaveIcon />
@@ -577,11 +642,14 @@ function App() {
           onDeleteHistory={handleDeleteHistory}
         />
 
-        {/* ========== 保存历史记录对话框 ========== */}
+        {/* ========== 保存/重命名历史记录对话框 ========== */}
         <SaveHistoryDialog
           open={saveDialogOpen}
           onClose={() => setSaveDialogOpen(false)}
-          onSave={handleSaveHistory}
+          onSave={handleRenameHistory}
+          initialName={histories.find(h => h.id === currentRecordId)?.name || ''}
+          title="重命名对话"
+          buttonLabel="重命名"
         />
 
         {/* ========== 恢复历史记录确认对话框 ========== */}

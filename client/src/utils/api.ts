@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ModelConfig, HistoryRecord, HistoryRecordSummary, Prompt } from '../types';
+import type { ChatMessage, ModelConfig, HistoryRecord, HistoryRecordSummary, Prompt } from '../types';
 
 // 创建 axios 实例，统一配置基础路径和超时
 const api = axios.create({
@@ -53,6 +53,12 @@ export async function fetchHistories(): Promise<HistoryRecordSummary[]> {
 // 保存历史记录
 export async function saveHistory(history: Omit<HistoryRecord, 'id' | 'timestamp'>): Promise<HistoryRecord> {
   const response = await api.post<HistoryRecord>('/histories', history);
+  return response.data;
+}
+
+// 创建或更新历史记录（upsert 语义）
+export async function upsertHistory(history: { id?: string; name: string; selectedModel: string | null; messages: ChatMessage[] }): Promise<HistoryRecord> {
+  const response = await api.post<HistoryRecord>('/histories/upsert', history);
   return response.data;
 }
 

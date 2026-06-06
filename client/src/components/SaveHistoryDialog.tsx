@@ -13,34 +13,28 @@ interface SaveHistoryDialogProps {
   open: boolean;
   onClose: () => void;
   onSave: (name: string) => void;
+  initialName?: string;   // 当前记录的名称，用于重命名时预填
+  title?: string;         // 对话框标题，默认为"重命名对话"
+  buttonLabel?: string;   // 确认按钮文本，默认为"重命名"
 }
-
-// 生成默认会话名称
-const generateDefaultName = (): string => {
-  const now = new Date();
-  const formatted = now.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  return `新会话 ${formatted}`;
-};
 
 export default function SaveHistoryDialog({
   open,
   onClose,
   onSave,
+  initialName = '',
+  title = '重命名对话',
+  buttonLabel = '重命名',
 }: SaveHistoryDialogProps) {
   // 会话名称输入状态
   const [name, setName] = useState('');
 
-  // 当弹窗打开时，重置输入并设置默认名称
+  // 当弹窗打开时，使用传入的初始名称
   useEffect(() => {
     if (open) {
-      setName(generateDefaultName());
+      setName(initialName);
     }
-  }, [open]);
+  }, [open, initialName]);
 
   // 处理保存操作
   const handleSave = () => {
@@ -60,7 +54,7 @@ export default function SaveHistoryDialog({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>保存到历史记录</DialogTitle>
+      <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <TextField
           autoFocus
@@ -81,7 +75,7 @@ export default function SaveHistoryDialog({
           variant="contained"
           disabled={!name.trim()}
         >
-          保存
+          {buttonLabel}
         </Button>
       </DialogActions>
     </Dialog>
