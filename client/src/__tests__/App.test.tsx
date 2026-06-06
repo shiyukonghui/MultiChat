@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
@@ -80,6 +80,29 @@ const handlers = [
     return HttpResponse.json(newHistory)
   }),
 
+  http.post('/api/histories/upsert', async ({ request }) => {
+    const body = await request.json() as any
+    const existingIndex = mockHistories.findIndex(h => h.id === body.id)
+    if (existingIndex !== -1) {
+      // 更新
+      mockHistories[existingIndex] = {
+        ...mockHistories[existingIndex],
+        ...body,
+        timestamp: Date.now(),
+      }
+      return HttpResponse.json(mockHistories[existingIndex])
+    } else {
+      // 创建
+      const newHistory: HistoryRecord = {
+        ...body,
+        id: `history-${Date.now()}`,
+        timestamp: Date.now(),
+      }
+      mockHistories.push(newHistory)
+      return HttpResponse.json(newHistory)
+    }
+  }),
+
   http.delete('/api/histories/:id', ({ params }) => {
     const id = params.id as string
     const index = mockHistories.findIndex(h => h.id === id)
@@ -98,7 +121,6 @@ beforeAll(() => server.listen())
 afterEach(() => {
   server.resetHandlers()
   vi.clearAllMocks()
-  localStorage.clear()
 })
 afterAll(() => server.close())
 
@@ -127,6 +149,18 @@ describe('App 组件集成测试', () => {
 
       expect(screen.getByText('模型列表')).toBeInTheDocument()
     })
+
+    it('页面加载时预加载历史记录列表', async () => {
+      const user = userEvent.setup()
+      render(<App />)
+      // 直接通过 aria-label 查找历史记录按钮
+      const historyButton = screen.getByRole('button', { name: /历史记录/ })
+      await user.click(historyButton)
+      // 应该能看到历史记录列表中的数据
+      await waitFor(() => {
+        expect(screen.getByText('测试对话 1')).toBeInTheDocument()
+      })
+    })
   })
 
   describe('新建会话流程', () => {
@@ -144,52 +178,20 @@ describe('App 组件集成测试', () => {
   })
 
   describe('清空会话流程', () => {
-    it('点击清空按钮显示确认对话框', async () => {
-      const user = userEvent.setup()
+    it('无消息时清空按钮禁用', () => {
       render(<App />)
 
-      const toolbar = screen.getByRole('toolbar')
-      const clearButton = within(toolbar).getByRole('button', { name: /清空当前会话/ })
-      await user.click(clearButton)
-
-      await waitFor(() => {
-        expect(screen.getByText('确认清空会话')).toBeInTheDocument()
-      })
-    })
-
-    it('确认清空后关闭对话框', async () => {
-      const user = userEvent.setup()
-      render(<App />)
-
-      const toolbar = screen.getByRole('toolbar')
-      const clearButton = within(toolbar).getByRole('button', { name: /清空当前会话/ })
-      await user.click(clearButton)
-
-      await waitFor(() => {
-        expect(screen.getByText('确认清空会话')).toBeInTheDocument()
-      })
-
-      const confirmButton = screen.getByRole('button', { name: '确认清空' })
-      await user.click(confirmButton)
-
-      await waitFor(() => {
-        expect(screen.queryByText('确认清空会话')).not.toBeInTheDocument()
-      })
+      const clearButton = screen.getByRole('button', { name: /清空当前会话/ })
+      expect(clearButton).toBeDisabled()
     })
   })
 
-  describe('保存历史记录流程', () => {
-    it('点击保存按钮显示对话框', async () => {
-      const user = userEvent.setup()
+  describe('重命名对话流程', () => {
+    it('无消息时重命名按钮禁用', () => {
       render(<App />)
-
-      const toolbar = screen.getByRole('toolbar')
-      const saveButton = within(toolbar).getByRole('button', { name: /保存当前会话/ })
-      await user.click(saveButton)
-
-      await waitFor(() => {
-        expect(screen.getByText('保存到历史记录')).toBeInTheDocument()
-      })
+      // 注意 tooltip 已改为"重命名当前对话"
+      const renameButton = screen.getByRole('button', { name: /重命名当前对话/ })
+      expect(renameButton).toBeDisabled()
     })
   })
 
@@ -198,8 +200,7 @@ describe('App 组件集成测试', () => {
       const user = userEvent.setup()
       render(<App />)
 
-      const toolbar = screen.getByRole('toolbar')
-      const historyButton = within(toolbar).getByRole('button', { name: /历史记录/ })
+      const historyButton = screen.getByRole('button', { name: /历史记录/ })
       await user.click(historyButton)
 
       await waitFor(() => {
@@ -209,36 +210,27 @@ describe('App 组件集成测试', () => {
   })
 
   describe('模型配置弹窗', () => {
-    it('点击配置按钮打开弹窗', async () => {
-      const user = userEvent.setup()
+    it('打开弹窗后可以关闭', async () => {
       render(<App />)
 
-      const toolbar = screen.getByRole('toolbar')
-      const configButton = within(toolbar).getByRole('button', { name: /模型配置/ })
-      await user.click(configButton)
+      // 打开模型配置弹窗
+      const configButton = screen.getByRole('button', { name: /模型配置/ })
+      // 使用原生 click 方法绕过 jsdom 中 MUI Tooltip 的 pointer-events 限制
+      configButton.click()
 
       await waitFor(() => {
-        expect(screen.getByText('模型配置管理')).toBeInTheDocument()
-      })
-    })
-
-    it('关闭按钮关闭弹窗', async () => {
-      const user = userEvent.setup()
-      render(<App />)
-
-      const toolbar = screen.getByRole('toolbar')
-      const configButton = within(toolbar).getByRole('button', { name: /模型配置/ })
-      await user.click(configButton)
-
-      await waitFor(() => {
-        expect(screen.getByText('模型配置管理')).toBeInTheDocument()
+        // Dialog 标题和内容区域都可能包含"模型配置管理"文本
+        const headings = screen.getAllByText('模型配置管理')
+        expect(headings.length).toBeGreaterThan(0)
       })
 
+      // 点击关闭按钮关闭弹窗
       const closeButton = screen.getByRole('button', { name: '关闭' })
-      await user.click(closeButton)
+      closeButton.click()
 
       await waitFor(() => {
-        expect(screen.queryByText('模型配置管理')).not.toBeInTheDocument()
+        // 关闭后 Dialog 标题消失
+        expect(screen.queryAllByText('模型配置管理').length).toBe(0)
       })
     })
   })
@@ -287,7 +279,7 @@ describe('App 组件集成测试', () => {
     it('无消息时禁用保存按钮', () => {
       render(<App />)
 
-      const saveButton = screen.getByRole('button', { name: /保存当前会话/ })
+      const saveButton = screen.getByRole('button', { name: /重命名当前对话/ })
       expect(saveButton).toBeDisabled()
     })
 

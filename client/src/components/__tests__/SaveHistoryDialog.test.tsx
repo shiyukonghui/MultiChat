@@ -22,7 +22,7 @@ describe('SaveHistoryDialog 组件测试', () => {
       )
 
       expect(screen.getByRole('dialog')).toBeInTheDocument()
-      expect(screen.getByText('保存到历史记录')).toBeInTheDocument()
+      expect(screen.getByText('重命名对话')).toBeInTheDocument()
     })
 
     it('open=false 时弹窗不可见', () => {
@@ -46,12 +46,12 @@ describe('SaveHistoryDialog 组件测试', () => {
         />
       )
 
-      expect(screen.getByText('保存到历史记录')).toBeInTheDocument()
+      expect(screen.getByText('重命名对话')).toBeInTheDocument()
     })
   })
 
-  describe('默认名称自动生成', () => {
-    it('弹窗打开时自动生成默认名称', () => {
+  describe('初始名称行为', () => {
+    it('弹窗打开时使用空的初始名称', () => {
       render(
         <SaveHistoryDialog
           open={true}
@@ -62,21 +62,22 @@ describe('SaveHistoryDialog 组件测试', () => {
 
       const input = screen.getByRole('textbox')
       const value = input.getAttribute('value') || ''
-      expect(value.startsWith('新会话')).toBe(true)
+      expect(value).toBe('')
     })
 
-    it('默认名称格式为"新会话 MM/DD HH:MM"', () => {
+    it('传入 initialName 时显示该名称', () => {
       render(
         <SaveHistoryDialog
           open={true}
           onClose={mockOnClose}
           onSave={mockOnSave}
+          initialName="测试对话"
         />
       )
 
       const input = screen.getByRole('textbox')
       const value = input.getAttribute('value') || ''
-      expect(value.startsWith('新会话')).toBe(true)
+      expect(value).toBe('测试对话')
     })
   })
 
@@ -105,7 +106,6 @@ describe('SaveHistoryDialog 组件测试', () => {
       )
 
       const input = screen.getByRole('textbox')
-      await user.clear(input)
       await user.type(input, '自定义会话名称')
 
       expect(input).toHaveValue('自定义会话名称')
@@ -150,7 +150,6 @@ describe('SaveHistoryDialog 组件测试', () => {
       )
 
       const input = screen.getByRole('textbox')
-      await user.clear(input)
       await user.type(input, '测试会话{enter}')
 
       expect(mockOnSave).toHaveBeenCalledWith('测试会话')
@@ -167,7 +166,7 @@ describe('SaveHistoryDialog 组件测试', () => {
       )
 
       const input = screen.getByRole('textbox')
-      await user.type(input, '{enter}')
+      await user.type(input, '测试{enter}')
 
       expect(mockOnClose).toHaveBeenCalled()
     })
@@ -183,7 +182,6 @@ describe('SaveHistoryDialog 组件测试', () => {
       )
 
       const input = screen.getByRole('textbox')
-      await user.clear(input)
       await user.type(input, '{enter}')
 
       expect(mockOnSave).not.toHaveBeenCalled()
@@ -200,7 +198,6 @@ describe('SaveHistoryDialog 组件测试', () => {
       )
 
       const input = screen.getByRole('textbox')
-      await user.clear(input)
       await user.type(input, '   {enter}')
 
       expect(mockOnSave).not.toHaveBeenCalled()
@@ -214,15 +211,15 @@ describe('SaveHistoryDialog 组件测试', () => {
           open={true}
           onClose={mockOnClose}
           onSave={mockOnSave}
+          initialName="测试内容"
         />
       )
 
-      const saveButton = screen.getByRole('button', { name: '保存' })
+      const saveButton = screen.getByRole('button', { name: '重命名' })
       expect(saveButton).not.toBeDisabled()
     })
 
-    it('空内容时保存按钮禁用', async () => {
-      const user = userEvent.setup()
+    it('空内容时保存按钮禁用', () => {
       render(
         <SaveHistoryDialog
           open={true}
@@ -231,28 +228,21 @@ describe('SaveHistoryDialog 组件测试', () => {
         />
       )
 
-      const input = screen.getByRole('textbox')
-      await user.clear(input)
-
-      const saveButton = screen.getByRole('button', { name: '保存' })
+      const saveButton = screen.getByRole('button', { name: '重命名' })
       expect(saveButton).toBeDisabled()
     })
 
-    it('只有空格时保存按钮禁用', async () => {
-      const user = userEvent.setup()
+    it('只有空格时保存按钮禁用', () => {
       render(
         <SaveHistoryDialog
           open={true}
           onClose={mockOnClose}
           onSave={mockOnSave}
+          initialName="   "
         />
       )
 
-      const input = screen.getByRole('textbox')
-      await user.clear(input)
-      await user.type(input, '   ')
-
-      const saveButton = screen.getByRole('button', { name: '保存' })
+      const saveButton = screen.getByRole('button', { name: '重命名' })
       expect(saveButton).toBeDisabled()
     })
   })
@@ -265,10 +255,11 @@ describe('SaveHistoryDialog 组件测试', () => {
           open={true}
           onClose={mockOnClose}
           onSave={mockOnSave}
+          initialName="测试内容"
         />
       )
 
-      const saveButton = screen.getByRole('button', { name: '保存' })
+      const saveButton = screen.getByRole('button', { name: '重命名' })
       await user.click(saveButton)
 
       expect(mockOnSave).toHaveBeenCalled()
@@ -285,10 +276,9 @@ describe('SaveHistoryDialog 组件测试', () => {
       )
 
       const input = screen.getByRole('textbox')
-      await user.clear(input)
       await user.type(input, '  测试会话名称  ')
 
-      const saveButton = screen.getByRole('button', { name: '保存' })
+      const saveButton = screen.getByRole('button', { name: '重命名' })
       await user.click(saveButton)
 
       expect(mockOnSave).toHaveBeenCalledWith('测试会话名称')
@@ -301,10 +291,11 @@ describe('SaveHistoryDialog 组件测试', () => {
           open={true}
           onClose={mockOnClose}
           onSave={mockOnSave}
+          initialName="测试内容"
         />
       )
 
-      const saveButton = screen.getByRole('button', { name: '保存' })
+      const saveButton = screen.getByRole('button', { name: '重命名' })
       await user.click(saveButton)
 
       expect(mockOnClose).toHaveBeenCalled()
@@ -358,17 +349,20 @@ describe('SaveHistoryDialog 组件测试', () => {
   })
 
   describe('弹窗打开时重置', () => {
-    it('每次打开都生成新的默认名称', async () => {
+    it('每次打开都重置为传入的 initialName', async () => {
       const user = userEvent.setup()
       const { rerender } = render(
         <SaveHistoryDialog
           open={true}
           onClose={mockOnClose}
           onSave={mockOnSave}
+          initialName="初始名称"
         />
       )
 
       const input = screen.getByRole('textbox')
+      expect(input).toHaveValue('初始名称')
+
       await user.clear(input)
       await user.type(input, '修改后的名称')
 
@@ -377,6 +371,7 @@ describe('SaveHistoryDialog 组件测试', () => {
           open={false}
           onClose={mockOnClose}
           onSave={mockOnSave}
+          initialName="初始名称"
         />
       )
 
@@ -385,12 +380,12 @@ describe('SaveHistoryDialog 组件测试', () => {
           open={true}
           onClose={mockOnClose}
           onSave={mockOnSave}
+          initialName="初始名称"
         />
       )
 
       const newInput = screen.getByRole('textbox')
-      expect(newInput).not.toHaveValue('修改后的名称')
-      expect(newInput.getAttribute('value')).toMatch(/^新会话/)
+      expect(newInput).toHaveValue('初始名称')
     })
   })
 
@@ -423,6 +418,85 @@ describe('SaveHistoryDialog 组件测试', () => {
       await user.keyboard('{Escape}')
 
       expect(mockOnSave).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('重命名模式', () => {
+    it('使用 initialName 时显示该名称', () => {
+      render(
+        <SaveHistoryDialog
+          open={true}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          initialName="测试对话"
+        />
+      )
+
+      const input = screen.getByRole('textbox')
+      expect(input).toHaveValue('测试对话')
+    })
+
+    it('不使用 initialName 时输入框为空', () => {
+      render(
+        <SaveHistoryDialog
+          open={true}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+        />
+      )
+
+      const input = screen.getByRole('textbox')
+      expect(input).toHaveValue('')
+    })
+
+    it('显示自定义标题', () => {
+      render(
+        <SaveHistoryDialog
+          open={true}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          title="自定义标题"
+        />
+      )
+
+      expect(screen.getByText('自定义标题')).toBeInTheDocument()
+    })
+
+    it('使用自定义按钮文本', () => {
+      render(
+        <SaveHistoryDialog
+          open={true}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          buttonLabel="自定义按钮"
+        />
+      )
+
+      expect(screen.getByRole('button', { name: '自定义按钮' })).toBeInTheDocument()
+    })
+
+    it('使用默认标题', () => {
+      render(
+        <SaveHistoryDialog
+          open={true}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+        />
+      )
+
+      expect(screen.getByText('重命名对话')).toBeInTheDocument()
+    })
+
+    it('使用默认按钮文本', () => {
+      render(
+        <SaveHistoryDialog
+          open={true}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+        />
+      )
+
+      expect(screen.getByRole('button', { name: '重命名' })).toBeInTheDocument()
     })
   })
 })

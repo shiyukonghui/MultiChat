@@ -420,6 +420,7 @@ function App() {
                 <Tooltip title="重命名当前对话">
                   <span>
                     <IconButton
+                      aria-label="重命名当前对话"
                       color="inherit"
                       onClick={() => setSaveDialogOpen(true)}
                       disabled={state.isLoading || state.messages.length === 0 || !currentRecordId}
@@ -432,6 +433,7 @@ function App() {
                 <Tooltip title="历史记录">
                   <span>
                     <IconButton
+                      aria-label="历史记录"
                       color="inherit"
                       onClick={() => setHistorySidebarOpen(true)}
                       size="small"
@@ -443,6 +445,7 @@ function App() {
                 <Tooltip title="清空当前会话">
                   <span>
                     <IconButton
+                      aria-label="清空当前会话"
                       color="inherit"
                       onClick={() => setClearDialogOpen(true)}
                       disabled={state.isLoading || state.messages.length === 0}
@@ -455,6 +458,7 @@ function App() {
                 <Tooltip title="系统提示词">
                   <span>
                     <IconButton
+                      aria-label="系统提示词"
                       color="inherit"
                       onClick={() => {
                         loadPrompts();
@@ -469,6 +473,7 @@ function App() {
                 <Tooltip title="模型配置">
                   <span>
                     <IconButton
+                      aria-label="模型配置"
                       color="inherit"
                       onClick={() => setConfigOpen(true)}
                       size="small"

@@ -15,6 +15,7 @@ import {
   fetchPrompts,
   createPrompt,
   updatePrompt,
+  upsertHistory,
   deletePrompt,
 } from '../api'
 import type { ModelConfig, HistoryRecord, HistoryRecordSummary, Prompt } from '../../types'
@@ -155,6 +156,32 @@ const handlers = [
     Object.assign(model, body)
     return HttpResponse.json(model)
   }),
+
+  // upsert 历史记录
+  http.post('/api/histories/upsert', async ({ request }) => {
+    const body = await request.json() as { id?: string; name: string; selectedModel: string | null; messages: any[] }
+    // 如果带 id 且找到已有记录，则更新
+    if (body.id) {
+      const existing = mockHistories.find(h => h.id === body.id)
+      if (existing) {
+        existing.name = body.name
+        existing.selectedModel = body.selectedModel
+        existing.messages = body.messages as any
+        existing.timestamp = Date.now()
+        return HttpResponse.json({ ...existing })
+      }
+    }
+    // 否则创建新记录
+    const newHistory: HistoryRecord = {
+      id: `history-${Date.now()}`,
+      name: body.name,
+      timestamp: Date.now(),
+      selectedModel: body.selectedModel,
+      messages: body.messages as any,
+    }
+    mockHistories.push(newHistory)
+    return HttpResponse.json(newHistory)
+  }),
 ]
 
 // 设置 MSW 服务器
@@ -286,6 +313,54 @@ describe('API 模块测试', () => {
       expect(history).toHaveProperty('id')
       expect(history).toHaveProperty('timestamp')
       expect(history.name).toBe('新对话')
+    })
+  })
+
+  describe('upsertHistory', () => {
+    it('不带 id 时创建新历史记录', async () => {
+      const historyData = {
+        name: '自动保存的对话',
+        selectedModel: 'gpt-4',
+        messages: [
+          { role: 'user' as const, content: '你好' },
+          { role: 'assistant' as const, content: '你好！', model: 'gpt-4' },
+        ],
+      }
+      const result = await upsertHistory(historyData)
+      expect(result).toHaveProperty('id')
+      expect(result).toHaveProperty('timestamp')
+      expect(result.name).toBe('自动保存的对话')
+      expect(result.messages).toHaveLength(2)
+    })
+
+    it('带 id 时更新已有历史记录', async () => {
+      const result = await upsertHistory({
+        id: 'history-1',
+        name: '更新后的对话',
+        selectedModel: 'claude-3',
+        messages: [
+          { role: 'user', content: '新的问题' },
+          { role: 'assistant', content: '新的回复', model: 'claude-3' },
+        ],
+      })
+      expect(result.id).toBe('history-1')
+      expect(result.name).toBe('更新后的对话')
+      expect(result.selectedModel).toBe('claude-3')
+      expect(result.messages).toHaveLength(2)
+      expect(result.messages[0].content).toBe('新的问题')
+    })
+
+    it('网络错误时抛出异常', async () => {
+      server.use(
+        http.post('/api/histories/upsert', () => {
+          return new HttpResponse(null, { status: 500 })
+        })
+      )
+      await expect(upsertHistory({
+        name: '测试',
+        selectedModel: null,
+        messages: [],
+      })).rejects.toThrow()
     })
   })
 

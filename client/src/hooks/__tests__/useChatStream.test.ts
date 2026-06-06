@@ -42,7 +42,8 @@ describe('useChatStream Hook 测试', () => {
     expect(result.current.state.error).toBeNull()
   })
 
-  it('从 localStorage 恢复历史消息', () => {
+  it('初始 messages 为空数组（不再从 localStorage 恢复）', () => {
+    // 即使 localStorage 中有数据，初始化时 messages 也应为空
     const messages: ChatMessage[] = [
       { role: 'user', content: '你好' },
       { role: 'assistant', content: '你好！', model: 'gpt-4' },
@@ -51,7 +52,7 @@ describe('useChatStream Hook 测试', () => {
     
     const { result } = renderHook(() => useChatStream())
     
-    expect(result.current.state.messages).toEqual(messages)
+    expect(result.current.state.messages).toEqual([])
   })
 
   it('sendMessage 添加用户消息', async () => {
@@ -353,34 +354,6 @@ describe('useChatStream Hook 测试', () => {
       })
       
       expect(result.current.state.selectedModel).toBe('model-with-special-chars!@#')
-    })
-  })
-
-  describe('状态持久化', () => {
-    it('消息保存到 localStorage', async () => {
-      const { result } = renderHook(() => useChatStream())
-      
-      await act(async () => {
-        result.current.sendMessage('持久化测试')
-      })
-      
-      const stored = localStorage.getItem('multichat_history')
-      expect(stored).toBeTruthy()
-      const parsed = JSON.parse(stored!)
-      expect(parsed.some((m: ChatMessage) => m.content === '持久化测试')).toBe(true)
-    })
-
-    it('重置清空 localStorage', async () => {
-      localStorage.setItem('multichat_history', JSON.stringify([{ role: 'user', content: 'test' }]))
-      
-      const { result } = renderHook(() => useChatStream())
-      
-      act(() => {
-        result.current.resetSession()
-      })
-      
-      const stored = localStorage.getItem('multichat_history')
-      expect(stored).toBe('[]')
     })
   })
 })
